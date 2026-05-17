@@ -1,8 +1,36 @@
 {
-  "name": "taphelu",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@luongdev/taphelu",
+  "version": "0.1.0",
+  "description": "Agent-native local workflow substrate for long-running AI-assisted projects.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luongdev/taphelu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/luongdev/taphelu/issues"
+  },
+  "homepage": "https://github.com/luongdev/taphelu#readme",
+  "keywords": [
+    "ai-agent",
+    "workflow",
+    "mcp",
+    "memory",
+    "codex",
+    "claude",
+    "gemini"
+  ],
+  "license": "MIT",
+  "files": [
+    "bin/",
+    "src/",
+    "taphelu-pack/",
+    "docs/",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.16.0"
   },
@@ -14,6 +42,6 @@
     "dl": "node ./bin/dl.mjs",
     "check": "node --check ./bin/dl.mjs && node --check ./bin/taphelu-mcp.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:cli": "node --check ./bin/dl.mjs && node --check ./bin/taphelu-mcp.mjs && node ./bin/dl.mjs status && node ./bin/dl.mjs commands && node ./bin/dl.mjs ask \"Create STATE.md, MEMORY.md, RUNS.md, and events.jsonl from the roadmap.\" && node ./bin/dl.mjs research --source .projects/RESEARCH-WORKFLOW.md --finding \"Research packets separate findings from inferences.\" --confidence medium \"How should dl research format evidence?\" && node ./bin/dl.mjs plan --task \"Create PLANNING-WORKFLOW.md\" --verification \"File exists and includes command contract\" \"Define the planning workflow\" && node ./bin/dl.mjs run --source .projects/RUN-WORKFLOW.md --finding \"Run workflow connects requirement, research, planning, verification, and closeout.\" --task \"Run the end-to-end MVP workflow.\" --verification \"Run packet reaches completed lifecycle.\" \"Validate the end-to-end MVP run workflow\" && node ./bin/dl.mjs verify --artifact src/commands/verify.mjs --test \"npm test\" --reviewed \"Validate the verification workflow\" && node ./bin/dl.mjs memory --category repo_facts && node ./bin/dl.mjs remember --category reusable_lessons \"Keep memory entries short and durable.\" && node ./bin/dl.mjs forget --category reusable_lessons --pattern durable && node ./bin/dl.mjs browser research --approval-scope \"browser research on local docs for this command\" --url http://localhost:3000 --purpose \"Inspect visible behavior\" --action \"Open page\" --observation \"The target renders the expected shell.\" \"Can the page render?\" && node ./bin/dl.mjs browser verify --approval-scope \"browser E2E on local app for this command\" --url http://localhost:3000 --step \"Open page\" --expected \"Expected shell is visible\" --actual \"Expected shell is visible\" --result pass \"Local smoke flow\" && node ./bin/dl.mjs import bmad"
+    "test:cli": "node --check ./bin/dl.mjs && node --check ./bin/taphelu-mcp.mjs && node ./bin/dl.mjs status && node ./bin/dl.mjs commands && node ./bin/dl.mjs ask \"Create STATE.md, MEMORY.md, RUNS.md, and events.jsonl from the roadmap.\" && node ./bin/dl.mjs research --source .projects/RESEARCH-WORKFLOW.md --finding \"Research packets separate findings from inferences.\" --confidence medium \"How should dl research format evidence?\" && node ./bin/dl.mjs plan --task \"Create PLANNING-WORKFLOW.md\" --verification \"File exists and includes command contract\" \"Define the planning workflow\" && node ./bin/dl.mjs run --source .projects/RUN-WORKFLOW.md --finding \"Run workflow connects requirement, research, planning, verification, and closeout.\" --task \"Run the end-to-end MVP workflow.\" --verification \"Run packet reaches completed lifecycle.\" \"Validate the end-to-end MVP run workflow\" && node ./bin/dl.mjs verify --artifact src/commands/verify.mjs --test \"npm test\" --reviewed \"Validate the verification workflow\" && node ./bin/dl.mjs review plan --runtime codex --files 5 --commits 3 && node ./bin/dl.mjs cleanup context --dry-run && node ./bin/dl.mjs doctor instructions && node ./bin/dl.mjs scan --path . --mode quick && node ./bin/dl.mjs memory --category repo_facts && node ./bin/dl.mjs remember --category reusable_lessons \"Keep memory entries short and durable.\" && node ./bin/dl.mjs forget --category reusable_lessons --pattern durable && node ./bin/dl.mjs browser research --approval-scope \"browser research on local docs for this command\" --url http://localhost:3000 --purpose \"Inspect visible behavior\" --action \"Open page\" --observation \"The target renders the expected shell.\" \"Can the page render?\" && node ./bin/dl.mjs browser verify --approval-scope \"browser E2E on local app for this command\" --url http://localhost:3000 --step \"Open page\" --expected \"Expected shell is visible\" --actual \"Expected shell is visible\" --result pass \"Local smoke flow\" && node ./bin/dl.mjs import bmad"
   }
 }

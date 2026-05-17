@@ -13,6 +13,9 @@ import { runImport } from "./commands/import-bmad.mjs";
 import { runInstall } from "./commands/install.mjs";
 import { runDoctor } from "./commands/doctor.mjs";
 import { runConfig } from "./commands/config.mjs";
+import { runReview } from "./commands/review.mjs";
+import { runCleanup } from "./commands/cleanup.mjs";
+import { runScan } from "./commands/scan.mjs";
 
 export function main(argv = process.argv, cwd = process.cwd()) {
   const [, , command, ...args] = argv;
@@ -22,7 +25,7 @@ export function main(argv = process.argv, cwd = process.cwd()) {
     return;
   }
 
-  const root = findProjectRoot(cwd);
+  const root = findProjectRoot(cwd) || bootstrapCommandRoot(command, args, cwd);
   if (!root) {
     fail("No .projects/PROJECT.md found from current directory upward.");
   }
@@ -42,8 +45,17 @@ export function main(argv = process.argv, cwd = process.cwd()) {
   if (command === "install") return runInstall(root, args);
   if (command === "doctor") return runDoctor(root, args);
   if (command === "config") return runConfig(root, args);
+  if (command === "review") return runReview(root, args);
+  if (command === "cleanup") return runCleanup(root, args);
+  if (command === "scan") return runScan(root, args);
 
   fail(`Unknown command: ${command}`);
+}
+
+function bootstrapCommandRoot(command, args, cwd) {
+  if (command === "scan") return cwd;
+  if (command === "import" && args[0] === "project") return cwd;
+  return null;
 }
 
 export function printHelp() {
@@ -64,8 +76,13 @@ Usage:
   dl browser research --approval-scope text --url url --purpose text --observation text [--write]
   dl browser verify --approval-scope text --url url --step text --expected text --actual text --result pass|fail|blocked [--write] <flow>
   dl import bmad [--path _bmad-output] [--write]
+  dl import project [--path .] [--mode quick|standard|deep] [--write]
+  dl scan [--path .] [--mode quick|standard|deep] [--dry-run|--write]
+  dl review status|plan [--runtime codex|claude|gemini] [--review-trigger text] [--files n] [--commits n]
+  dl cleanup context [--limit n] [--dry-run|--write]
   dl install --runtime codex|claude|gemini|all --scope local|global [--config-dir path] [--dry-run|--write]
   dl doctor --runtime codex|claude|gemini|all --scope local|global [--config-dir path]
+  dl doctor instructions
   dl config get [key]
   dl config set testing.strictness low|medium|deep
 
@@ -82,6 +99,9 @@ Commands:
   forget    Remove memory by category, exact item, pattern, or reset.
   browser   Produce gated browser research or E2E verification reports.
   import    Import external workflow context.
+  scan      Scan an existing project into Taphelu context.
+  review    Evaluate permission-gated cross-AI review policy.
+  cleanup   Preview or write compact project context cleanup.
   install   Generate Taphelu agent pack adapters for AI runtimes.
   doctor    Validate generated Taphelu runtime adapters and MCP config.
   config    Read or update project-local Taphelu config.

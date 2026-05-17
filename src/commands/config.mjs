@@ -5,7 +5,7 @@ import { getProjectConfigValue, readProjectConfig, setProjectConfigValue } from 
 export function runConfig(root, rawArgs) {
   const [subcommand, ...rest] = rawArgs;
   if (!subcommand) {
-    fail("Missing config subcommand. Usage: dl config get [key] | dl config set testing.strictness low|medium|deep");
+    fail("Missing config subcommand. Usage: dl config get [key] | dl config set <supported-key> <value>");
   }
   if (subcommand === "get") return runConfigGet(root, rest);
   if (subcommand === "set") return runConfigSet(root, rest);
@@ -23,7 +23,7 @@ function runConfigGet(root, rawArgs) {
 
 function runConfigSet(root, rawArgs) {
   const { values } = parseArgs(rawArgs);
-  if (values.length !== 2) fail("Usage: dl config set testing.strictness low|medium|deep");
+  if (values.length !== 2) fail("Usage: dl config set <supported-key> <value>");
   const [key, value] = values;
   const config = setProjectConfigValue(root, key, value);
   console.log(`# Config Updated

@@ -17,6 +17,7 @@ Generated runtime files are not source of truth. They include a Taphelu managed 
 - `taphelu-workflow`: ask, research, plan, run.
 - `taphelu-memory`: observe, recall, promote, search.
 - `taphelu-verify`: verification and closeout.
+- `taphelu-context`: cleanup, instruction hygiene, and project scan usage.
 - `taphelu-browser`: permission-gated browser research/E2E.
 - `taphelu-bmad`: BMAD import and continuation.
 
@@ -31,11 +32,16 @@ Generated runtime files are not source of truth. They include a Taphelu managed 
 - `taphelu-ux-analyst`
 - `taphelu-visual-qa`
 - `taphelu-memory-curator`
+- `taphelu-context-curator`
 - `taphelu-workflow-adapter`
 
 If a runtime supports native agents, Taphelu generates native agent files. Otherwise, agent role contracts are generated as skills.
 
 `taphelu-lead` asks for sub-agent permission at session start. `taphelu-planner` creates parallelizable task contracts; `taphelu-qa` reviews task testability before `taphelu-dev` executes. UI-visible work requires both UX analysis and visual QA evidence before closeout.
+
+Cross-AI review is permission-gated. The lead asks before invoking another runtime and records skipped/requested/completed/blocked review status.
+
+The context curator runs after verified closeout to compact `.projects` and keep runtime instruction files small.
 
 ## Testing Policy
 

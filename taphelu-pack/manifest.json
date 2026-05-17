@@ -5,14 +5,15 @@
   "managedMarker": "TAPHELU-GENERATED",
   "mcp": "mcp.json",
   "profiles": {
-    "core": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify"],
-    "full": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-browser", "taphelu-bmad"]
+    "core": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context"],
+    "full": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context", "taphelu-browser", "taphelu-bmad"]
   },
   "skills": [
     { "name": "taphelu-core", "path": "skills/taphelu-core.md" },
     { "name": "taphelu-workflow", "path": "skills/taphelu-workflow.md" },
     { "name": "taphelu-memory", "path": "skills/taphelu-memory.md" },
     { "name": "taphelu-verify", "path": "skills/taphelu-verify.md" },
+    { "name": "taphelu-context", "path": "skills/taphelu-context.md" },
     { "name": "taphelu-browser", "path": "skills/taphelu-browser.md" },
     { "name": "taphelu-bmad", "path": "skills/taphelu-bmad.md" }
   ],
@@ -26,6 +27,7 @@
     { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md" },
     { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md" },
     { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md" },
+    { "name": "taphelu-context-curator", "path": "agents/taphelu-context-curator.md" },
     { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md" }
   ],
   "runtimes": {

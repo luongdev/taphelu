@@ -7,6 +7,7 @@ import { readProjectFile, withProjectFilesTransaction, writeTextFileAtomic } fro
 import { section, replaceSection, formatList, escapeTable, titleCase } from "../utils.mjs";
 import { COMMAND_MANIFEST } from "../manifest.mjs";
 import { parseTestingStrictness, testingStrictness } from "../project-config.mjs";
+import { evaluateCrossAiReview } from "../review-policy.mjs";
 
 const APPROVAL_SENSITIVE_TRIGGERS = [
   "browser",
@@ -32,6 +33,12 @@ export function runVerify(root, rawArgs) {
     reviewTriggers: options["review-trigger"] ?? [],
     reviewEvidence: options["review-evidence"] ?? [],
     reviewed: Boolean(options.reviewed),
+    crossAiReview: evaluateCrossAiReview(root, {
+      triggers: options["review-trigger"] ?? [],
+      evidence: options["review-evidence"] ?? [],
+      reviewed: Boolean(options.reviewed),
+      currentRuntime: options.runtime || "codex",
+    }),
     blockers: options.blocker ?? [],
     notes: options.note ?? [],
     evidence: options.evidence ? [options.evidence] : [],
@@ -58,6 +65,7 @@ export function analyzeVerification(goal, input) {
   const browserChecks = input.browserChecks;
   const reviewTriggers = input.reviewTriggers;
   const reviewEvidence = input.reviewEvidence;
+  const crossAiReview = input.crossAiReview || null;
   const evidence = input.evidence;
   const strictness = parseTestingStrictness(input.testingStrictness || "medium");
   const testabilityReview = input.testabilityReview || [];
@@ -76,6 +84,9 @@ export function analyzeVerification(goal, input) {
   }
   if (reviewTriggers.length && !hasReviewEvidence) {
     blockers.push("Review trigger is present but no review evidence was recorded.");
+  }
+  if (crossAiReview?.required && !hasReviewEvidence) {
+    blockers.push(crossAiReview.closeout);
   }
 
   const dimensions = [
@@ -160,13 +171,14 @@ export function analyzeVerification(goal, input) {
     dimension(
       "review_triggers_handled",
       "Review triggers handled",
-      reviewTriggers.length && !hasReviewEvidence ? "BLOCKED" : "PASS",
+      (reviewTriggers.length || crossAiReview?.required) && !hasReviewEvidence ? "BLOCKED" : "PASS",
       reviewTriggers.length
         ? [
           `Triggers: ${reviewTriggers.join(", ")}`,
           ...(reviewEvidence.length ? reviewEvidence : input.reviewed ? ["Marked reviewed."] : []),
+          ...(crossAiReview ? [`Cross-AI: ${crossAiReview.closeout}`] : []),
         ]
-        : ["No review trigger recorded."],
+        : [crossAiReview ? `Cross-AI: ${crossAiReview.closeout}` : "No review trigger recorded."],
     ),
     dimension(
       "diff_scope_acceptable",
@@ -207,6 +219,7 @@ export function analyzeVerification(goal, input) {
     reviewTriggers,
     reviewEvidence,
     reviewed: input.reviewed,
+    crossAiReview,
     blockers,
     notes,
     dimensions,
@@ -274,6 +287,13 @@ ${formatList(verification.reviewTriggers, "None.")}
 
 ${verification.reviewed ? "- Marked reviewed." : formatList(verification.reviewEvidence, "None.")}
 
+## Cross-AI Review
+
+${verification.crossAiReview ? `- Level: \`${verification.crossAiReview.level}\`
+- Status: \`${verification.crossAiReview.status}\`
+- Closeout: ${verification.crossAiReview.closeout}
+- Permission: ${verification.crossAiReview.permissionPrompt || "Not needed."}` : "- Not evaluated."}
+
 ## Approval Gates
 
 ${formatList(verification.approvalGates, "None required or recorded.")}
@@ -323,6 +343,7 @@ export function recordVerification(root, verification, runId = `run-${timestampF
         skipped_test_rationale: verification.skippedTestRationale,
         review_triggers: verification.reviewTriggers,
         review_evidence: verification.reviewEvidence,
+        cross_ai_review: verification.crossAiReview,
         blockers: verification.blockers,
         notes: verification.notes,
       },

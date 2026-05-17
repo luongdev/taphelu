@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { findProjectRoot, readProjectFile, writeTextFileAtomic } from "../project.mjs";
 import { section, replaceSection } from "../utils.mjs";
 import { analyzeVerification, recordVerification } from "../commands/verify.mjs";
+import { analyzeContextCleanup, applyContextCleanup, publicContextCleanupSummary } from "../commands/cleanup.mjs";
+import { analyzeProjectScan, applyProjectScan } from "../commands/scan.mjs";
+import { evaluateCrossAiReview } from "../review-policy.mjs";
 import {
   captureL0,
   closeSession,
@@ -71,6 +74,25 @@ export const TAPHELU_MCP_TOOLS = [
     note: arraySchema("Notes."),
     evidence: arraySchema("Additional verification evidence."),
     next_action: stringSchema("Next action if closeout is blocked or needs follow-up."),
+    current_runtime: stringSchema("Current AI runtime: codex, claude, or gemini."),
+  }),
+  tool("dl_cleanup_context", "Preview or write compact project context cleanup after closeout.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    limit: numberSchema("Number of RUNS detail sections to keep."),
+    write: booleanSchema("Whether to write cleanup. Defaults to false preview."),
+  }),
+  tool("dl_review_status", "Evaluate permission-gated cross-AI review policy.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    current_runtime: stringSchema("Current AI runtime: codex, claude, or gemini."),
+    review_trigger: arraySchema("Review triggers such as medium risk, 5 files, MCP, state, security."),
+    review_evidence: arraySchema("Review evidence already collected."),
+    reviewed: booleanSchema("Whether review has already happened."),
+  }),
+  tool("dl_scan_project", "Scan an existing project into Taphelu context without source dumps.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    path: stringSchema("Path under workspace to scan. Defaults to current project root."),
+    mode: stringSchema("Scan mode: quick, standard, or deep."),
+    write: booleanSchema("Whether to write .projects scan context. Defaults to false preview."),
   }),
   tool("dl_memory_search", "Search L1/L2 structured memory with source IDs.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -170,6 +192,12 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
 
   if (name === "dl_close") {
     const goal = args.goal || section(readProjectFile(root, "STATE.md"), "Current Goal") || "Close agent work unit.";
+    const crossAiReview = evaluateCrossAiReview(root, {
+      triggers: normalizeArray(args.review_trigger),
+      evidence: normalizeArray(args.review_evidence),
+      reviewed: Boolean(args.reviewed || normalizeArray(args.review_evidence).length),
+      currentRuntime: args.current_runtime || args.platform || args.agent_id || "codex",
+    });
     const verification = analyzeVerification(goal, {
       requirements: normalizeArray(args.requirement),
       constraints: normalizeArray(args.constraint),
@@ -185,6 +213,7 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
       reviewTriggers: normalizeArray(args.review_trigger),
       reviewEvidence: normalizeArray(args.review_evidence),
       reviewed: Boolean(args.reviewed || normalizeArray(args.review_evidence).length),
+      crossAiReview,
       blockers: normalizeArray(args.blocker),
       notes: normalizeArray(args.note),
       evidence: normalizeArray(args.evidence),
@@ -208,7 +237,48 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
       source: "close",
       content: `Closed goal "${goal}" with verdict ${verification.verdict}.`,
     });
-    return { closed: true, verification, record, nextRoute: "done" };
+    return {
+      closed: true,
+      verification,
+      record,
+      cleanupRecommendation: publicContextCleanupSummary(analyzeContextCleanup(root, { limit: 5 })),
+      nextRoute: "done",
+    };
+  }
+
+  if (name === "dl_cleanup_context") {
+    const report = analyzeContextCleanup(root, { limit: args.limit || 5 });
+    if (args.write) applyContextCleanup(root, report);
+    return {
+      report: publicContextCleanupSummary(report),
+      wrote: Boolean(args.write),
+      nextRoute: args.write ? "done" : "write_optional",
+    };
+  }
+
+  if (name === "dl_review_status") {
+    return {
+      review: evaluateCrossAiReview(root, {
+        triggers: normalizeArray(args.review_trigger),
+        evidence: normalizeArray(args.review_evidence),
+        reviewed: Boolean(args.reviewed),
+        currentRuntime: args.current_runtime || "codex",
+      }),
+      nextRoute: "continue",
+    };
+  }
+
+  if (name === "dl_scan_project") {
+    const report = analyzeProjectScan(root, {
+      path: args.path || ".",
+      mode: args.mode || "standard",
+    });
+    if (args.write) applyProjectScan(root, report);
+    return {
+      report,
+      wrote: Boolean(args.write),
+      nextRoute: report.nextRoute,
+    };
   }
 
   if (name === "dl_conversation_search") {
@@ -228,6 +298,7 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
 export function buildCompactContext(root, query = "", limit = 5) {
   const state = readProjectFile(root, "STATE.md");
   const memory = readProjectFile(root, "MEMORY.md");
+  const codebase = readProjectFile(root, "CODEBASE.md");
   const recall = query ? recallMemory(root, { query, limit }) : recallMemory(root, { limit: 3 });
   return {
     currentGoal: section(state, "Current Goal") || "",
@@ -238,6 +309,8 @@ export function buildCompactContext(root, query = "", limit = 5) {
     productDecisions: section(memory, "Product Decisions") || "",
     architectureDecisions: section(memory, "Architecture Decisions") || "",
     layeredProfile: section(memory, "Layered Memory Profile") || "",
+    codebaseSummary: section(codebase, "Summary") || "",
+    codebaseStack: section(codebase, "Stack") || "",
     recall,
   };
 }
@@ -356,6 +429,9 @@ function normalizeToolName(name) {
     taphelu_memory_search: "dl_memory_search",
     taphelu_conversation_search: "dl_conversation_search",
     taphelu_memory_promote: "dl_memory_promote",
+    taphelu_cleanup_context: "dl_cleanup_context",
+    taphelu_review_status: "dl_review_status",
+    taphelu_scan_project: "dl_scan_project",
   };
   return aliases[name] || name;
 }

@@ -7,19 +7,37 @@ import { readProjectFile, relativeProjectPath, withProjectFilesTransaction, writ
 import { formatList, escapeTable, replaceSection } from "../utils.mjs";
 import { memoryBullets } from "./memory.mjs";
 import { fail } from "../errors.mjs";
+import { analyzeProjectScan, applyProjectScan, buildProjectScanReport } from "./scan.mjs";
 
 export function runImport(root, rawArgs) {
   const [subcommand, ...rest] = rawArgs;
   if (!subcommand) {
-    fail("Missing import subcommand. Usage: dl import bmad [--path _bmad-output] [--write]");
+    fail("Missing import subcommand. Usage: dl import bmad|project [--path path] [--write]");
   }
 
   if (subcommand === "bmad") {
     runImportBmad(root, rest);
     return;
   }
+  if (subcommand === "project") {
+    runImportProject(root, rest);
+    return;
+  }
 
   fail(`Unknown import subcommand: ${subcommand}`);
+}
+
+function runImportProject(root, rawArgs) {
+  const { options, values } = parseArgs(rawArgs);
+  if (values.length) {
+    fail("Unexpected positional value for dl import project. Use --path, --mode, and --write.");
+  }
+  const report = analyzeProjectScan(root, {
+    path: options.path || ".",
+    mode: options.mode || "standard",
+  });
+  if (options.write && !options["dry-run"]) applyProjectScan(root, report);
+  console.log(buildProjectScanReport(report, Boolean(options.write && !options["dry-run"])));
 }
 
 function runImportBmad(root, rawArgs) {

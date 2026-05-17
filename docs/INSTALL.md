@@ -37,6 +37,14 @@ dl doctor --runtime all --scope global --config-dir /tmp/taphelu-runtime
 
 Existing unmanaged adapter files block installation. Remove them or migrate them before reinstalling.
 
+Instruction hygiene:
+
+```bash
+dl doctor instructions
+```
+
+This warns when runtime instruction files become too large or contain raw run history, roadmap dumps, logs, browser content, PII, or secrets.
+
 Project test policy:
 
 ```bash

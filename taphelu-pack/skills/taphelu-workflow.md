@@ -12,6 +12,7 @@ Use the CLI primitives when MCP is unavailable or when a human-readable packet i
 - `dl plan` for executable plans.
 - `dl run` for end-to-end packet assembly.
 - `dl config get testing.strictness` to load project test strictness.
+- `dl scan` before planning inside an existing un-mapped repo.
 
 Keep packets concise. State assumptions, evidence, blockers, and next route.
 

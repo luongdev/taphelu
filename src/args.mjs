@@ -314,6 +314,24 @@ export function parseArgs(args) {
       i += 1;
       continue;
     }
+    if (arg.startsWith("--files=")) {
+      options.files = arg.slice("--files=".length);
+      continue;
+    }
+    if (arg === "--files") {
+      options.files = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--commits=")) {
+      options.commits = arg.slice("--commits=".length);
+      continue;
+    }
+    if (arg === "--commits") {
+      options.commits = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
     if (arg.startsWith("--follow-up=")) {
       pushOption(options, "follow-up", arg.slice("--follow-up=".length));
       continue;

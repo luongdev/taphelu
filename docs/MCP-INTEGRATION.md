@@ -14,6 +14,9 @@ Primary tools:
 - `dl_recall`
 - `dl_checkpoint`
 - `dl_close`
+- `dl_cleanup_context`
+- `dl_review_status`
+- `dl_scan_project`
 - `dl_memory_search`
 - `dl_conversation_search`
 - `dl_memory_promote`
@@ -28,6 +31,10 @@ When a host requires qualified tool names, use `taphelu:dl_start` style names.
 - `skipped_test_rationale`
 
 Use these fields to carry the QA testability gate into closeout.
+
+`dl_close` also returns a cleanup recommendation after a passing closeout. Use `dl_cleanup_context` only after permission; preview is the default.
+
+`dl_scan_project` maps an existing repo into compact project context. It reports structure, stack signals, docs, entrypoints, and inferred test commands without storing raw source dumps. It respects `.gitignore` and `.agentignore`.
 
 ## Runtime Install
 
