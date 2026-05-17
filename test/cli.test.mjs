@@ -1,0 +1,1388 @@
+import test, { afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import { recoverProjectTransactions, withProjectFilesTransaction } from "../src/project.mjs";
+import { appendEvent } from "../src/events.mjs";
+import { callTapheluTool, listTapheluTools } from "../src/mcp/tools.mjs";
+import { handleMcpMessage } from "../src/mcp/server.mjs";
+import { applyInstallPlan, buildInstallPlan, loadPack } from "../src/pack/adapter.mjs";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const cliPath = join(repoRoot, "bin", "dl.mjs");
+const mcpPath = join(repoRoot, "bin", "taphelu-mcp.mjs");
+const tempRoots = new Set();
+const originalTapheluHome = process.env.TAPHELU_HOME;
+const originalTapheluMemoryDb = process.env.TAPHELU_MEMORY_DB;
+
+afterEach(() => {
+  for (const root of tempRoots) {
+    rmSync(root, { recursive: true, force: true });
+  }
+  tempRoots.clear();
+  restoreEnv("TAPHELU_HOME", originalTapheluHome);
+  restoreEnv("TAPHELU_MEMORY_DB", originalTapheluMemoryDb);
+});
+
+function makeProject() {
+  const root = mkdtempSync(join(tmpdir(), "taphelu-test-"));
+  tempRoots.add(root);
+  process.env.TAPHELU_HOME = join(root, ".taphelu-test-home");
+  delete process.env.TAPHELU_MEMORY_DB;
+  const projects = join(root, ".projects");
+  mkdirSync(projects);
+  writeFileSync(join(projects, "PROJECT.md"), "# Test Project\n");
+  writeFileSync(join(projects, "STATE.md"), `# State
+
+## Current Goal
+
+Test goal.
+
+## Current Milestone
+
+Milestone Test.
+
+## Current Phase
+
+Testing.
+
+## Next Action
+
+Run CLI tests.
+
+## Blockers
+
+None.
+
+## Last Verification
+
+Pending.
+`);
+  writeFileSync(join(projects, "MEMORY.md"), `# Memory
+
+## Product Decisions
+
+- Test decision.
+
+## Repo Facts
+
+- Existing repo fact.
+
+## Reusable Lessons
+
+- Duplicate lesson.
+- Duplicate lesson.
+`);
+  writeFileSync(join(projects, "RUNS.md"), `# Runs
+
+## Run Index
+
+| Run ID | Date | Goal | Outcome |
+|---|---|---|---|
+`);
+  writeFileSync(join(projects, "events.jsonl"), "");
+  return root;
+}
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
+function run(root, args) {
+  return spawnSync(process.execPath, [cliPath, ...args], {
+    cwd: root,
+    encoding: "utf8",
+  });
+}
+
+function mcpFrame(message) {
+  const json = JSON.stringify(message);
+  return `Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`;
+}
+
+function parseMcpFrames(output) {
+  const messages = [];
+  let cursor = 0;
+  while (cursor < output.length) {
+    const headerEnd = output.indexOf("\r\n\r\n", cursor);
+    if (headerEnd === -1) break;
+    const header = output.slice(cursor, headerEnd);
+    const match = /Content-Length:\s*(\d+)/i.exec(header);
+    assert.ok(match, `Missing Content-Length in ${header}`);
+    const start = headerEnd + 4;
+    const end = start + Number.parseInt(match[1], 10);
+    messages.push(JSON.parse(output.slice(start, end)));
+    cursor = end;
+  }
+  return messages;
+}
+
+function makeBmadFixture(root, options = {}) {
+  const base = join(root, "_bmad-output");
+  mkdirSync(join(base, "planning-artifacts", "epics"), { recursive: true });
+  mkdirSync(join(base, "implementation-artifacts", "stories"), { recursive: true });
+  writeFileSync(join(base, "project-context.md"), "# Imported Product\n\nA compact imported product goal.\n");
+  if (!options.minimal) {
+    writeFileSync(join(base, "planning-artifacts", "PRD.md"), "# Imported PRD\n\n- Must continue imported planning.\n");
+    writeFileSync(join(base, "planning-artifacts", "architecture.md"), "# Imported Architecture\n\n- Use local files.\n");
+    writeFileSync(join(base, "planning-artifacts", "epics", "epic-1.md"), "# Epic 1\n\n- Build continuation.\n");
+    writeFileSync(join(base, "implementation-artifacts", "sprint-status.yaml"), "status: active\nnext: implement story\n");
+    writeFileSync(join(base, "implementation-artifacts", "stories", "story-1.md"), "# Story 1\n\n- First story.\n");
+  }
+  if (options.blocker) {
+    writeFileSync(join(base, "planning-artifacts", "PRD.md"), "# Imported PRD\n\nBlocker: scope conflicts with current execution.\n");
+  }
+  return base;
+}
+
+test("status reads project state", () => {
+  const root = makeProject();
+  const result = run(root, ["status"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# taphelu status/);
+  assert.match(result.stdout, /Test goal/);
+  assert.match(result.stdout, /Test decision/);
+});
+
+test("commands prints stable command manifest", () => {
+  const root = makeProject();
+  const result = run(root, ["commands"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Command Manifest/);
+  assert.match(result.stdout, /`status`/);
+  assert.match(result.stdout, /`verify`/);
+  assert.match(result.stdout, /`import`/);
+  assert.match(result.stdout, /`config`/);
+});
+
+test("mcp lists taphelu agent lifecycle tools", async () => {
+  const root = makeProject();
+  const direct = listTapheluTools().map((tool) => tool.name);
+  const response = await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, root);
+
+  assert.ok(direct.includes("dl_start"));
+  assert.ok(direct.includes("dl_recall"));
+  assert.ok(direct.includes("dl_close"));
+  assert.equal(direct.includes("taphelu_start"), false);
+  assert.equal(response.result.tools.some((tool) => tool.name === "dl_observe"), true);
+});
+
+test("mcp accepts legacy taphelu tool aliases without listing them", () => {
+  const root = makeProject();
+  const result = callTapheluTool("taphelu_start", {
+    cwd: root,
+    agent_id: "legacy",
+    goal: "Legacy alias.",
+  });
+
+  assert.equal(result.session.agentId, "legacy");
+  assert.equal(result.session.goal, "Legacy alias.");
+});
+
+test("mcp tool schemas expose handler-supported fields", () => {
+  const tools = Object.fromEntries(listTapheluTools().map((tool) => [tool.name, tool]));
+
+  assert.ok(tools.dl_observe.inputSchema.properties.metadata);
+  assert.ok(tools.dl_memory_promote.inputSchema.properties.metadata);
+  for (const field of [
+    "requirement",
+    "constraint",
+    "non_goal",
+    "browser_check",
+    "testing_strictness",
+    "testability",
+    "required_evidence",
+    "skipped_test_rationale",
+    "approval_gate",
+    "evidence",
+    "next_action",
+    "reviewed",
+  ]) {
+    assert.ok(tools.dl_close.inputSchema.properties[field], `dl_close missing ${field}`);
+  }
+});
+
+test("project file transaction rolls back touched project files", () => {
+  const root = makeProject();
+  const memoryPath = join(root, ".projects", "MEMORY.md");
+  const runsPath = join(root, ".projects", "RUNS.md");
+  const beforeMemory = readFileSync(memoryPath, "utf8");
+  const beforeRuns = readFileSync(runsPath, "utf8");
+
+  assert.throws(() => withProjectFilesTransaction(root, ["MEMORY.md", "RUNS.md"], () => {
+    writeFileSync(memoryPath, "# Broken\n");
+    writeFileSync(runsPath, "# Broken\n");
+    throw new Error("simulated failure");
+  }), /simulated failure/);
+
+  assert.equal(readFileSync(memoryPath, "utf8"), beforeMemory);
+  assert.equal(readFileSync(runsPath, "utf8"), beforeRuns);
+});
+
+test("project file transaction recovers pending journal", () => {
+  const root = makeProject();
+  const statePath = join(root, ".projects", "STATE.md");
+  const beforeState = readFileSync(statePath, "utf8");
+  const journalPath = join(root, ".projects", ".tx-test.json");
+  writeFileSync(journalPath, `${JSON.stringify({
+    status: "pending",
+    snapshots: [{ path: statePath, exists: true, content: beforeState }],
+  })}\n`);
+  writeFileSync(statePath, "interrupted write");
+
+  recoverProjectTransactions(root);
+
+  assert.equal(readFileSync(statePath, "utf8"), beforeState);
+  assert.equal(existsSync(journalPath), false);
+});
+
+test("project file transaction leaves active journal untouched", () => {
+  const root = makeProject();
+  const statePath = join(root, ".projects", "STATE.md");
+  const beforeState = readFileSync(statePath, "utf8");
+  const journalPath = join(root, ".projects", ".tx-active.json");
+  writeFileSync(journalPath, `${JSON.stringify({
+    status: "pending",
+    pid: process.pid,
+    updatedAt: Date.now(),
+    snapshots: [{ path: statePath, exists: true, content: beforeState }],
+  })}\n`);
+  writeFileSync(statePath, "active write");
+
+  recoverProjectTransactions(root);
+
+  assert.equal(readFileSync(statePath, "utf8"), "active write");
+  assert.equal(existsSync(journalPath), true);
+});
+
+test("project file transaction rolls back own event append when isolated", () => {
+  const root = makeProject();
+  const eventsPath = join(root, ".projects", "events.jsonl");
+  const beforeEvents = readFileSync(eventsPath, "utf8");
+
+  assert.throws(() => withProjectFilesTransaction(root, ["events.jsonl"], () => {
+    appendEvent(root, { ts: "2026-05-17T00:00:00.000Z", type: "test_event", run_id: "run-1", summary: "own append", data: {} });
+    throw new Error("simulated failure");
+  }), /simulated failure/);
+
+  assert.equal(readFileSync(eventsPath, "utf8"), beforeEvents);
+});
+
+test("project file transaction preserves concurrent event append on rollback", () => {
+  const root = makeProject();
+  const eventsPath = join(root, ".projects", "events.jsonl");
+
+  assert.throws(() => withProjectFilesTransaction(root, ["events.jsonl"], () => {
+    appendEvent(root, { ts: "2026-05-17T00:00:00.000Z", type: "test_event", run_id: "run-1", summary: "own append", data: {} });
+    appendFileSync(eventsPath, `${JSON.stringify({ ts: "2026-05-17T00:00:00.001Z", type: "parallel_event", run_id: "run-2", summary: "parallel append", data: {} })}\n`);
+    throw new Error("simulated failure");
+  }), /simulated failure/);
+
+  const events = readFileSync(eventsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.type), ["parallel_event"]);
+});
+
+test("project file transaction recovers partial append chunks", () => {
+  const root = makeProject();
+  const eventsPath = join(root, ".projects", "events.jsonl");
+  const ownFirst = `${JSON.stringify({ type: "own_first" })}\n`;
+  const ownSecond = `${JSON.stringify({ type: "own_second" })}\n`;
+  const parallel = `${JSON.stringify({ type: "parallel_event" })}\n`;
+  const journalPath = join(root, ".projects", ".tx-partial.json");
+  writeFileSync(journalPath, `${JSON.stringify({
+    status: "pending",
+    snapshots: [{
+      path: eventsPath,
+      exists: true,
+      appendOnly: true,
+      baseLength: 0,
+      appendedChunks: [ownFirst, ownSecond],
+    }],
+  })}\n`);
+  writeFileSync(eventsPath, `${ownFirst}${parallel}`);
+
+  recoverProjectTransactions(root);
+
+  const events = readFileSync(eventsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.type), ["parallel_event"]);
+});
+
+test("canonical agent pack validates one source for skills and agents", () => {
+  const pack = loadPack();
+  const plan = buildInstallPlan(makeProject(), { runtime: "all", scope: "local" });
+
+  assert.equal(pack.manifest.name, "taphelu-agent-pack");
+  assert.equal(pack.skills.length, 6);
+  assert.equal(pack.agents.length, 10);
+  assert.ok(pack.agents.some((agent) => agent.name === "taphelu-lead"));
+  assert.ok(pack.agents.some((agent) => agent.name === "taphelu-qa"));
+  assert.equal(pack.agents.some((agent) => agent.name === "taphelu-orchestrator"), false);
+  assert.equal(plan.runtimes.length, 3);
+  assert.equal(plan.blockers.length, 0);
+  assert.ok(plan.files.some((file) => file.path.includes(".codex")));
+  assert.ok(plan.files.some((file) => file.path.includes(".claude")));
+  assert.ok(plan.files.some((file) => file.path.includes(".gemini")));
+});
+
+test("install plan rolls back generated files on write failure", () => {
+  const root = makeProject();
+  const generatedDir = join(root, "generated", "nested");
+  const firstPath = join(generatedDir, "SKILL.md");
+  const blockingPath = join(root, "blocking-file");
+  writeFileSync(blockingPath, "not a directory");
+
+  assert.throws(() => applyInstallPlan({
+    blockers: [],
+    files: [
+      { path: firstPath, content: "generated", kind: "skill" },
+      { path: join(blockingPath, "child.md"), content: "will fail", kind: "skill" },
+    ],
+  }));
+
+  assert.equal(existsSync(firstPath), false);
+  assert.equal(existsSync(generatedDir), false);
+});
+
+test("mcp stdio server handles initialize tools/list and tools/call", () => {
+  const root = makeProject();
+  const input = [
+    mcpFrame({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } }),
+    mcpFrame({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+    mcpFrame({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "dl_start",
+        arguments: { cwd: root, goal: "Stdio smoke." },
+      },
+    }),
+  ].join("");
+  const result = spawnSync(process.execPath, [mcpPath], {
+    cwd: root,
+    input,
+    encoding: "utf8",
+  });
+  const responses = parseMcpFrames(result.stdout);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(responses[0].result.serverInfo.name, "taphelu");
+  assert.ok(responses[1].result.tools.some((tool) => tool.name === "dl_start"));
+  assert.equal(responses[2].result.structuredContent.session.goal, "Stdio smoke.");
+});
+
+test("mcp stdio server skips malformed headers and continues buffered messages", () => {
+  const root = makeProject();
+  const input = [
+    "X-Invalid: 1\r\n\r\n",
+    mcpFrame({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  ].join("");
+  const result = spawnSync(process.execPath, [mcpPath], {
+    cwd: root,
+    input,
+    encoding: "utf8",
+  });
+  const responses = parseMcpFrames(result.stdout);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(responses.length, 1);
+  assert.ok(responses[0].result.tools.some((tool) => tool.name === "dl_start"));
+});
+
+test("mcp stdio server returns tool errors without exiting", () => {
+  const root = makeProject();
+  const input = [
+    mcpFrame({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "dl_close",
+        arguments: { cwd: root, testing_strictness: "strictest" },
+      },
+    }),
+    mcpFrame({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+  ].join("");
+  const result = spawnSync(process.execPath, [mcpPath], {
+    cwd: root,
+    input,
+    encoding: "utf8",
+  });
+  const responses = parseMcpFrames(result.stdout);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(responses[0].result.isError, true);
+  assert.match(responses[0].result.content[0].text, /Invalid testing\.strictness/);
+  assert.ok(responses[1].result.tools.some((tool) => tool.name === "dl_start"));
+});
+
+test("install dry-run plans generated adapters without writing", () => {
+  const root = makeProject();
+  const result = run(root, ["install", "--runtime", "all", "--scope", "local", "--dry-run"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Taphelu Install Plan/);
+  assert.match(result.stdout, /`dry_run`/);
+  assert.equal(existsSync(join(root, ".codex")), false);
+  assert.equal(existsSync(join(root, ".mcp.json")), false);
+});
+
+test("install write creates local runtime adapters and doctor passes", () => {
+  const root = makeProject();
+  const install = run(root, ["install", "--runtime", "all", "--scope", "local", "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "local"]);
+  const codexSkill = readFileSync(join(root, ".codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
+  const claudeAgent = readFileSync(join(root, ".claude", "agents", "taphelu-lead.md"), "utf8");
+  const geminiAgentSkill = readFileSync(join(root, ".gemini", "skills", "taphelu-lead", "SKILL.md"), "utf8");
+  const claudeMcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
+  const geminiSettings = JSON.parse(readFileSync(join(root, ".gemini", "settings.json"), "utf8"));
+  const codexToml = readFileSync(join(root, ".codex", "config.toml"), "utf8");
+
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(codexSkill, /TAPHELU-GENERATED/);
+  assert.match(claudeAgent, /taphelu-lead/);
+  assert.match(claudeAgent, /sub-agent permission/);
+  assert.match(geminiAgentSkill, /runtime has no native Taphelu subagent adapter/);
+  assert.match(codexToml, /\[mcp_servers\.taphelu\]/);
+  assert.equal(claudeMcp.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.equal(geminiSettings.mcpServers.taphelu.args[0], mcpPath);
+  assert.match(doctor.stdout, /`PASS`/);
+});
+
+test("global install supports runtime config dir and is idempotent", () => {
+  const root = makeProject();
+  for (const runtime of ["codex", "claude", "gemini"]) {
+    const configDir = join(root, `${runtime}-home`);
+    const first = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
+    const second = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
+    const doctor = run(root, ["doctor", "--runtime", runtime, "--scope", "global", "--config-dir", configDir]);
+
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(doctor.status, 0, doctor.stderr);
+    assert.match(doctor.stdout, /`PASS`/);
+  }
+});
+
+test("install blocks unmanaged adapter files", () => {
+  const root = makeProject();
+  const target = join(root, ".codex", "skills", "taphelu-core");
+  mkdirSync(target, { recursive: true });
+  writeFileSync(join(target, "SKILL.md"), "# Unmanaged\n");
+  const result = run(root, ["install", "--runtime", "codex", "--scope", "local", "--write"]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /existing file is not Taphelu-managed/);
+});
+
+test("config get and set manage project testing strictness", () => {
+  const root = makeProject();
+  const initial = run(root, ["config", "get", "testing.strictness"]);
+  const updated = run(root, ["config", "set", "testing.strictness", "deep"]);
+  const final = run(root, ["config", "get", "testing.strictness"]);
+  const config = JSON.parse(readFileSync(join(root, ".projects", "config.json"), "utf8"));
+
+  assert.equal(initial.status, 0, initial.stderr);
+  assert.match(initial.stdout, /`medium`/);
+  assert.equal(updated.status, 0, updated.stderr);
+  assert.equal(final.status, 0, final.stderr);
+  assert.match(final.stdout, /`deep`/);
+  assert.equal(config.testing.strictness, "deep");
+});
+
+test("dl_start returns compact context without raw L0 history", () => {
+  const root = makeProject();
+  const result = callTapheluTool("dl_start", {
+    cwd: root,
+    agent_id: "codex",
+    platform: "mcp",
+    goal: "Implement lifecycle memory.",
+  });
+
+  assert.match(result.session.id, /^session_/);
+  assert.equal(result.session.agentId, "codex");
+  assert.equal(result.context.currentGoal, "Test goal.");
+  assert.equal(result.context.recall.l1Memories.length, 0);
+  assert.equal(result.memory.l0Records, 1);
+  assert.equal(result.memory.dbPath.includes(join(root, ".projects")), false);
+  assert.match(result.memory.dbPath, /\.taphelu-test-home[\/\\]memory[\/\\].*taphelu\.db$/);
+  assert.equal(existsSync(result.memory.dbPath), true);
+  assert.equal(existsSync(join(root, ".projects", "memory")), false);
+});
+
+test("mcp observe captures L0 and conversation search drills down", () => {
+  const root = makeProject();
+  const started = callTapheluTool("dl_start", { cwd: root, goal: "Search memory." });
+  const observed = callTapheluTool("dl_observe", {
+    cwd: root,
+    session_id: started.session.id,
+    role: "agent",
+    source: "tool_result",
+    content: "SQLite FTS should find this observation.",
+  });
+  const searched = callTapheluTool("dl_conversation_search", {
+    cwd: root,
+    query: "SQLite",
+  });
+
+  assert.match(observed.record.id, /^l0_/);
+  assert.equal(searched.records.length, 1);
+  assert.equal(searched.records[0].id, observed.record.id);
+});
+
+test("memory promotes source-traceable L1, L2, and L3 records", () => {
+  const root = makeProject();
+  const started = callTapheluTool("dl_start", { cwd: root, goal: "Layer memory." });
+  const observed = callTapheluTool("dl_observe", {
+    cwd: root,
+    session_id: started.session.id,
+    content: "Agent lifecycle should be MCP-first.",
+  });
+  const l1 = callTapheluTool("dl_memory_promote", {
+    cwd: root,
+    layer: "l1",
+    type: "decision",
+    confidence: "high",
+    content: "Agent lifecycle is MCP-first.",
+    source_ids: [observed.record.id],
+  });
+  const l2 = callTapheluTool("dl_memory_promote", {
+    cwd: root,
+    layer: "l2",
+    title: "Lifecycle correction",
+    content: "Workflow direction was corrected toward agent-native MCP lifecycle.",
+    source_ids: [observed.record.id],
+    memory_ids: [l1.memory.id],
+  });
+  const l3 = callTapheluTool("dl_memory_promote", {
+    cwd: root,
+    layer: "l3",
+    key: "agent_direction",
+    content: "Primary agent interface is MCP lifecycle tools.",
+    source_ids: [l1.memory.id],
+    mirror: true,
+  });
+  const recalled = callTapheluTool("dl_recall", { cwd: root, query: "MCP lifecycle" });
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+
+  assert.match(l1.memory.id, /^l1_/);
+  assert.match(l2.scene.id, /^l2_/);
+  assert.equal(l3.profile.key, "agent_direction");
+  assert.equal(recalled.memory.l1Memories[0].sourceIds[0], observed.record.id);
+  assert.match(memory, /## Layered Memory Profile/);
+  assert.match(memory, /agent_direction/);
+});
+
+test("unsafe observation is redacted in L0 and blocked from promotion", () => {
+  const root = makeProject();
+  const observed = callTapheluTool("dl_observe", {
+    cwd: root,
+    content: "{\\\"api_key\\\":\\\"my secret value\\\", \"token\": \"sk-abcdefghijklmnopqrstuvwxyz123456\"}",
+  });
+  const searched = callTapheluTool("dl_conversation_search", {
+    cwd: root,
+    query: "api_key",
+  });
+
+  assert.equal(observed.record.unsafe, 1);
+  assert.doesNotMatch(searched.records[0].content, /my secret value/);
+  assert.doesNotMatch(searched.records[0].content, /abcdefghijklmnopqrstuvwxyz123456/);
+  assert.throws(() => callTapheluTool("dl_memory_promote", {
+    cwd: root,
+    layer: "l1",
+    content: "api_key=abc123",
+    source_ids: [observed.record.id],
+  }), /cannot be promoted/);
+});
+
+test("dl_close blocks without verification evidence", () => {
+  const root = makeProject();
+  const started = callTapheluTool("dl_start", { cwd: root, goal: "Close gate." });
+  const closed = callTapheluTool("dl_close", {
+    cwd: root,
+    session_id: started.session.id,
+    goal: "Close gate.",
+  });
+
+  assert.equal(closed.closed, false);
+  assert.equal(closed.verification.verdict, "BLOCKED");
+  assert.match(closed.record.source, /close_blocked/);
+});
+
+test("dl_close records passing verification and closes session", () => {
+  const root = makeProject();
+  const started = callTapheluTool("dl_start", { cwd: root, goal: "Close pass." });
+  const closed = callTapheluTool("dl_close", {
+    cwd: root,
+    session_id: started.session.id,
+    goal: "Close pass.",
+    artifact: ["src/mcp/tools.mjs"],
+    test: ["npm test"],
+    review_trigger: ["runtime command behavior change"],
+    review_evidence: ["Peer review ready."],
+  });
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(closed.closed, true);
+  assert.equal(closed.verification.verdict, "PASS_WITH_NOTES");
+  assert.equal(events.at(-1).type, "verification_completed");
+});
+
+test("mcp tools/call wraps structured handler result", async () => {
+  const root = makeProject();
+  const response = await handleMcpMessage({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "dl_start",
+      arguments: { cwd: root, goal: "MCP call." },
+    },
+  }, root);
+
+  assert.equal(response.result.isError, false);
+  assert.equal(response.result.structuredContent.session.goal, "MCP call.");
+  assert.match(response.result.content[0].text, /MCP call/);
+});
+
+test("ask routes specific artifact work to plan", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "ask",
+    "Create STATE.md, MEMORY.md, RUNS.md, and events.jsonl from the roadmap.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Requirement Packet/);
+  assert.match(result.stdout, /Ambiguity level: low/);
+  assert.match(result.stdout, /`plan`/);
+});
+
+test("ask blocks unsafe broad browser automation", () => {
+  const root = makeProject();
+  const result = run(root, ["ask", "Automate this website"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Ambiguity level: high/);
+  assert.match(result.stdout, /No safe assumptions/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("ask does not block ordinary website content edits", () => {
+  const root = makeProject();
+  const result = run(root, ["ask", "Update the website footer text."]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Requirement Packet/);
+  assert.doesNotMatch(result.stdout, /No safe assumptions/);
+  assert.match(result.stdout, /`plan`/);
+});
+
+test("research blocks unsupported claims", () => {
+  const root = makeProject();
+  const result = run(root, ["research", "What is the current API behavior?"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /No sources recorded/);
+  assert.match(result.stdout, /No findings recorded/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("research routes sourced findings to plan", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "research",
+    "--source",
+    ".projects/PROJECT.md",
+    "--finding",
+    "The project file exists.",
+    "--confidence",
+    "medium",
+    "How should research be recorded?",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Research Packet/);
+  assert.match(result.stdout, /The project file exists/);
+  assert.match(result.stdout, /`plan`/);
+});
+
+test("plan includes task-level verification", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "plan",
+    "--task",
+    "Create PLANNING-WORKFLOW.md",
+    "--verification",
+    "File exists and includes command contract.",
+    "--owner",
+    "taphelu-dev",
+    "--boundary",
+    "contract",
+    "--testability",
+    "artifact-check",
+    "Define the planning workflow.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Plan Packet/);
+  assert.match(result.stdout, /Create PLANNING-WORKFLOW\.md/);
+  assert.match(result.stdout, /File exists and includes command contract/);
+  assert.match(result.stdout, /## QA Testability Gate/);
+  assert.match(result.stdout, /taphelu-dev/);
+  assert.match(result.stdout, /artifact-check/);
+  assert.match(result.stdout, /`execute`/);
+});
+
+test("flag values may start with dashes when supplied as values", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "plan",
+    "--task",
+    "--document flag-like input",
+    "Plan flag-like task.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--document flag-like input/);
+});
+
+test("plan applies deep testing strictness to changed logic", () => {
+  const root = makeProject();
+  const set = run(root, ["config", "set", "testing.strictness", "deep"]);
+  const result = run(root, [
+    "plan",
+    "--task",
+    "Update MCP command parser.",
+    "Plan parser change.",
+  ]);
+
+  assert.equal(set.status, 0, set.stderr);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /## Testing Strictness/);
+  assert.match(result.stdout, /`deep`/);
+  assert.match(result.stdout, /unit/);
+  assert.match(result.stdout, /Deep strictness/);
+});
+
+test("verify reports a verdict from artifacts and tests", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "verify",
+    "--artifact",
+    "src/commands/verify.mjs",
+    "--test",
+    "npm test",
+    "--testing-strictness",
+    "medium",
+    "--testability",
+    "T1: integration",
+    "--required-evidence",
+    "T1: npm test",
+    "--skipped-test-rationale",
+    "No unit test because CLI smoke covers this glue path.",
+    "Validate verification workflow.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Verification Report/);
+  assert.match(result.stdout, /## Verdict/);
+  assert.match(result.stdout, /## Testing Policy/);
+  assert.match(result.stdout, /T1: integration/);
+  assert.match(result.stdout, /`PASS_WITH_NOTES`/);
+  assert.match(result.stdout, /`done`/);
+});
+
+test("verify blocks review triggers without review evidence", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "verify",
+    "--artifact",
+    "src/commands/verify.mjs",
+    "--test",
+    "npm test",
+    "--testing-strictness",
+    "medium",
+    "--testability",
+    "T1: integration",
+    "--required-evidence",
+    "T1: npm test",
+    "--review-trigger",
+    "large diff",
+    "Validate risky workflow.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Review trigger is present/);
+  assert.match(result.stdout, /`BLOCKED`/);
+});
+
+test("verify write records verdict in events, state, and runs", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "verify",
+    "--write",
+    "--artifact",
+    "STATE.md",
+    "--artifact",
+    "RUNS.md",
+    "--test",
+    "npm test",
+    "--testing-strictness",
+    "medium",
+    "--testability",
+    "T1: integration",
+    "--required-evidence",
+    "T1: npm test",
+    "--review-trigger",
+    "large diff",
+    "--reviewed",
+    "Close Milestone 10.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const runs = readFileSync(join(root, ".projects", "RUNS.md"), "utf8");
+
+  assert.equal(events.at(-1).type, "verification_completed");
+  assert.equal(events.at(-1).data.verdict, "PASS_WITH_NOTES");
+  assert.equal(events.at(-1).data.testing_strictness, "medium");
+  assert.deepEqual(events.at(-1).data.testability_review, ["T1: integration"]);
+  assert.match(state, /\$dl verify/);
+  assert.match(runs, /Close Milestone 10/);
+});
+
+test("run completes an end-to-end packet from requirement to plan", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "run",
+    "--source",
+    ".projects/PROJECT.md",
+    "--finding",
+    "The project has a local context root.",
+    "--task",
+    "Execute a minimal workflow run.",
+    "--verification",
+    "Run packet reaches completed lifecycle.",
+    "Run an end-to-end workflow check.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Run Packet/);
+  assert.match(result.stdout, /Lifecycle State/);
+  assert.match(result.stdout, /`completed`/);
+  assert.match(result.stdout, /Verification Verdict/);
+  assert.match(result.stdout, /Run packet reaches completed lifecycle/);
+});
+
+test("run blocks research goals without source-grounded findings", () => {
+  const root = makeProject();
+  const result = run(root, ["run", "Research current API docs."]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Run Packet/);
+  assert.match(result.stdout, /Research evidence is incomplete/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("run blocks approval-sensitive plans without approval gate", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "run",
+    "--approval-scope",
+    "browser research on local app for this test",
+    "--source",
+    ".projects/PROJECT.md",
+    "--finding",
+    "The project has a local context root.",
+    "Implement browser verification workflow.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Plan is blocked by a missing approval gate/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("run completes approval-sensitive plans with approval gate", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "run",
+    "--approval-scope",
+    "browser research on local app for this test",
+    "--approval-gate",
+    "Browser use approved for this test.",
+    "--source",
+    ".projects/PROJECT.md",
+    "--finding",
+    "The project has a local context root.",
+    "Implement browser verification workflow.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Run Packet/);
+  assert.match(result.stdout, /`completed`/);
+});
+
+test("write flags append valid JSONL events", () => {
+  const root = makeProject();
+  const ask = run(root, ["ask", "--write", "Create a packet."]);
+  const research = run(root, [
+    "research",
+    "--write",
+    "--source",
+    ".projects/PROJECT.md",
+    "--finding",
+    "The project file exists.",
+    "Record evidence.",
+  ]);
+  const plan = run(root, ["plan", "--write", "Create a plan."]);
+
+  assert.equal(ask.status, 0, ask.stderr);
+  assert.equal(research.status, 0, research.stderr);
+  assert.equal(plan.status, 0, plan.stderr);
+
+  const lines = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const events = lines.map((line) => JSON.parse(line));
+
+  assert.equal(events.length, 4);
+  assert.deepEqual(events.map((event) => event.type), [
+    "goal_received",
+    "requirement_packet_created",
+    "research_recorded",
+    "plan_created",
+  ]);
+});
+
+test("write refuses secrets before appending events", () => {
+  const root = makeProject();
+  const result = run(root, ["ask", "--write", "Use api_key=abc123 to call a service."]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Refusing to write event/);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8");
+  assert.equal(events.trim(), "");
+});
+
+test("run write records events and updates resumable files", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "run",
+    "--write",
+    "--task",
+    "Create a resumable run packet.",
+    "--verification",
+    "STATE.md and RUNS.md capture the run.",
+    "Create a resumable run.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.type), [
+    "run_started",
+    "goal_received",
+    "requirement_packet_created",
+    "plan_created",
+    "verification_completed",
+    "run_closed",
+  ]);
+
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const runs = readFileSync(join(root, ".projects", "RUNS.md"), "utf8");
+  assert.match(state, /Create a resumable run/);
+  assert.match(state, /\$dl run/);
+  assert.match(runs, /Create a resumable run packet/);
+  assert.match(runs, /Completed/);
+});
+
+test("run write updates compact state headings and recreates missing sections", () => {
+  const root = makeProject();
+  writeFileSync(join(root, ".projects", "STATE.md"), `# State
+
+## Current Goal
+Old goal.
+
+## Current Milestone
+Old milestone.
+
+## Next Action
+Old next action.
+`);
+
+  const result = run(root, [
+    "run",
+    "--write",
+    "--task",
+    "Update flexible state sections.",
+    "--verification",
+    "STATE.md has refreshed sections.",
+    "Refresh state from a run.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  assert.match(state, /## Current Goal\n\nRefresh state from a run\./);
+  assert.match(state, /## Current Phase\n\n/);
+  assert.match(state, /## Blockers\n\nNone\./);
+  assert.match(state, /## Last Verification\n\n/);
+});
+
+test("run resume uses recorded project state", () => {
+  const root = makeProject();
+  const result = run(root, ["run", "--resume", "run-test"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Resume Packet/);
+  assert.match(result.stdout, /run-test/);
+  assert.match(result.stdout, /Test goal/);
+  assert.match(result.stdout, /`resume`/);
+});
+
+test("memory summarizes selected categories", () => {
+  const root = makeProject();
+  const result = run(root, ["memory", "--category", "repo_facts"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Memory Overview/);
+  assert.match(result.stdout, /`repo_facts`/);
+  assert.match(result.stdout, /Existing repo fact/);
+});
+
+test("remember writes durable memory and event", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "remember",
+    "--write",
+    "--category",
+    "reusable_lessons",
+    "--source",
+    ".projects/MEMORY-WORKFLOW.md",
+    "Keep memory entries short and durable.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Remember Packet/);
+  assert.match(result.stdout, /`write`/);
+
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.match(memory, /Keep memory entries short and durable/);
+  assert.equal(events.at(-1).type, "memory_recorded");
+});
+
+test("remember replaces conflicting memory", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "remember",
+    "--write",
+    "--category",
+    "repo_facts",
+    "--replace",
+    "Existing repo fact.",
+    "Updated repo fact.",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  assert.doesNotMatch(memory, /Existing repo fact/);
+  assert.match(memory, /Updated repo fact/);
+});
+
+test("remember blocks sensitive memory", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "remember",
+    "--write",
+    "--category",
+    "repo_facts",
+    "api_key=abc123",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /`blocked`/);
+
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8");
+  assert.doesNotMatch(memory, /abc123/);
+  assert.equal(events.trim(), "");
+});
+
+test("forget removes memory by pattern", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "forget",
+    "--write",
+    "--category",
+    "repo_facts",
+    "--pattern",
+    "Existing",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Existing repo fact/);
+
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  assert.doesNotMatch(memory, /Existing repo fact/);
+});
+
+test("memory prune removes duplicate bullets", () => {
+  const root = makeProject();
+  const before = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8").length;
+  const result = run(root, ["memory", "--prune", "--write", "--category", "reusable_lessons"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Removed: 1/);
+
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const after = memory.length;
+  assert.ok(after < before);
+  assert.equal((memory.match(/Duplicate lesson/g) ?? []).length, 1);
+});
+
+test("browser research blocks without permission", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "browser",
+    "research",
+    "--url",
+    "http://localhost:3000",
+    "--observation",
+    "The page renders.",
+    "Can the page render?",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Browser Research Packet/);
+  assert.match(result.stdout, /requires explicit task or session permission/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("browser research writes summarized observation events", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "browser",
+    "research",
+    "--write",
+    "--approval-scope",
+    "browser research on local app for this test",
+    "--url",
+    "http://localhost:3000",
+    "--purpose",
+    "Inspect visible shell",
+    "--action",
+    "Open page",
+    "--observation",
+    "The page renders the expected shell.",
+    "--evidence",
+    ".projects/artifacts/shell.png",
+    "Can the page render?",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /`plan`/);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(events.at(-1).type, "browser_research_recorded");
+  assert.equal(events.at(-1).data.evidence_path, ".projects/artifacts/shell.png");
+});
+
+test("browser research rejects raw page content", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "browser",
+    "research",
+    "--write",
+    "--approval-scope",
+    "browser research on local app for this test",
+    "--url",
+    "http://localhost:3000",
+    "--observation",
+    "<html><body>raw page</body></html>",
+    "Can the page render?",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /raw browser content/);
+  assert.match(result.stdout, /`blocked`/);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8");
+  assert.equal(events.trim(), "");
+});
+
+test("browser verify passes with permission and user-visible result", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "browser",
+    "verify",
+    "--write",
+    "--approval-scope",
+    "browser E2E on local app for this test",
+    "--url",
+    "http://localhost:3000",
+    "--precondition",
+    "Dev server is running.",
+    "--step",
+    "Open page",
+    "--expected",
+    "Expected shell is visible.",
+    "--actual",
+    "Expected shell is visible.",
+    "--result",
+    "pass",
+    "--evidence",
+    ".projects/artifacts/e2e.png",
+    "Local smoke flow",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Browser Verification Report/);
+  assert.match(result.stdout, /`done`/);
+
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(events.at(-1).type, "browser_verification_recorded");
+  assert.equal(events.at(-1).data.result, "pass");
+});
+
+test("browser verify failed result blocks done", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "browser",
+    "verify",
+    "--approval-scope",
+    "browser E2E on local app for this test",
+    "--url",
+    "http://localhost:3000",
+    "--step",
+    "Open page",
+    "--expected",
+    "Expected shell is visible.",
+    "--actual",
+    "Blank page.",
+    "--result",
+    "fail",
+    "Local smoke flow",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Failed browser verification blocks done/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("import bmad handles missing optional files gracefully", () => {
+  const root = makeProject();
+  makeBmadFixture(root, { minimal: true });
+  const result = run(root, ["import", "bmad"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# BMAD Import Report/);
+  assert.match(result.stdout, /Imported Product/);
+  assert.match(result.stdout, /No epic artifacts discovered/);
+  assert.match(result.stdout, /`continue`/);
+});
+
+test("import bmad detects blockers", () => {
+  const root = makeProject();
+  makeBmadFixture(root, { blocker: true });
+  const result = run(root, ["import", "bmad"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /blocker: Blocker: scope conflicts/);
+  assert.match(result.stdout, /`blocked`/);
+});
+
+test("import bmad write updates continuation state and memory", () => {
+  const root = makeProject();
+  makeBmadFixture(root);
+  const result = run(root, ["import", "bmad", "--write"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /`continue`/);
+
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.match(state, /Continue BMAD-imported plan/);
+  assert.match(state, /Run `dl plan` against the imported BMAD continuation summary/);
+  assert.match(memory, /BMAD import source: _bmad-output/);
+  assert.equal(events.at(-1).type, "bmad_imported");
+});
+
+test("imported bmad project can feed status and plan", () => {
+  const root = makeProject();
+  makeBmadFixture(root);
+  const imported = run(root, ["import", "bmad", "--write"]);
+  const status = run(root, ["status"]);
+  const plan = run(root, [
+    "plan",
+    "--context",
+    "_bmad-output/project-context.md",
+    "--task",
+    "Continue imported story.",
+    "--verification",
+    "Plan references imported context.",
+    "Continue BMAD-imported plan.",
+  ]);
+
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.equal(status.status, 0, status.stderr);
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.match(status.stdout, /Continue BMAD-imported plan/);
+  assert.match(plan.stdout, /_bmad-output\/project-context.md/);
+  assert.match(plan.stdout, /`execute`/);
+});
+
+test("missing flag value exits with clear error", () => {
+  const root = makeProject();
+  const result = run(root, ["ask", "--mode"]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Missing value for --mode/);
+});

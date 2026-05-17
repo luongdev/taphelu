@@ -1,0 +1,28 @@
+export const EVENT_TYPES = {
+  GOAL_RECEIVED: "goal_received",
+  REQUIREMENT_PACKET_CREATED: "requirement_packet_created",
+  RESEARCH_RECORDED: "research_recorded",
+  PLAN_CREATED: "plan_created",
+  RUN_STARTED: "run_started",
+  RUN_BLOCKED: "run_blocked",
+  RUN_CLOSED: "run_closed",
+  RUN_RESUMED: "run_resumed",
+  VERIFICATION_COMPLETED: "verification_completed",
+  MEMORY_REVIEWED: "memory_reviewed",
+  MEMORY_RECORDED: "memory_recorded",
+  MEMORY_FORGOTTEN: "memory_forgotten",
+  MEMORY_PRUNED: "memory_pruned",
+  BROWSER_RESEARCH_RECORDED: "browser_research_recorded",
+  BROWSER_VERIFICATION_RECORDED: "browser_verification_recorded",
+  BMAD_IMPORTED: "bmad_imported",
+};
+
+export const MEMORY_CATEGORIES = {
+  user_preferences: "User Preferences",
+  project_decisions: "Product Decisions",
+  architecture_constraints: "Architecture Decisions",
+  workflow_preferences: "Workflow Principles",
+  integration_constraints: "Integration Constraints",
+  repo_facts: "Repo Facts",
+  reusable_lessons: "Reusable Lessons",
+};

@@ -1,0 +1,6 @@
+{
+  "name": "taphelu",
+  "transport": "stdio",
+  "command": "node",
+  "args": ["bin/taphelu-mcp.mjs"]
+}

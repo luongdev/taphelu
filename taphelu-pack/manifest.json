@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "name": "taphelu-agent-pack",
+  "version": "0.1.0",
+  "managedMarker": "TAPHELU-GENERATED",
+  "mcp": "mcp.json",
+  "profiles": {
+    "core": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify"],
+    "full": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-browser", "taphelu-bmad"]
+  },
+  "skills": [
+    { "name": "taphelu-core", "path": "skills/taphelu-core.md" },
+    { "name": "taphelu-workflow", "path": "skills/taphelu-workflow.md" },
+    { "name": "taphelu-memory", "path": "skills/taphelu-memory.md" },
+    { "name": "taphelu-verify", "path": "skills/taphelu-verify.md" },
+    { "name": "taphelu-browser", "path": "skills/taphelu-browser.md" },
+    { "name": "taphelu-bmad", "path": "skills/taphelu-bmad.md" }
+  ],
+  "agents": [
+    { "name": "taphelu-lead", "path": "agents/taphelu-lead.md" },
+    { "name": "taphelu-analyst", "path": "agents/taphelu-analyst.md" },
+    { "name": "taphelu-planner", "path": "agents/taphelu-planner.md" },
+    { "name": "taphelu-architect", "path": "agents/taphelu-architect.md" },
+    { "name": "taphelu-dev", "path": "agents/taphelu-dev.md" },
+    { "name": "taphelu-qa", "path": "agents/taphelu-qa.md" },
+    { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md" },
+    { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md" },
+    { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md" },
+    { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md" }
+  ],
+  "runtimes": {
+    "codex": {
+      "configDir": ".codex",
+      "globalEnv": "CODEX_HOME",
+      "defaultGlobalDir": ".codex",
+      "skillsDir": "skills",
+      "nativeAgents": false,
+      "mcpConfig": "config.toml"
+    },
+    "claude": {
+      "configDir": ".claude",
+      "globalEnv": "CLAUDE_CONFIG_DIR",
+      "defaultGlobalDir": ".claude",
+      "skillsDir": "skills",
+      "agentsDir": "agents",
+      "nativeAgents": true,
+      "mcpConfig": ".mcp.json"
+    },
+    "gemini": {
+      "configDir": ".gemini",
+      "globalEnv": "GEMINI_CONFIG_DIR",
+      "defaultGlobalDir": ".gemini",
+      "skillsDir": "skills",
+      "nativeAgents": false,
+      "mcpConfig": "settings.json"
+    }
+  }
+}

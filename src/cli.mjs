@@ -1,0 +1,89 @@
+import { findProjectRoot } from "./project.mjs";
+import { fail } from "./errors.mjs";
+import { printStatus } from "./commands/status.mjs";
+import { printCommands } from "./commands/commands.mjs";
+import { runAsk } from "./commands/ask.mjs";
+import { runResearch } from "./commands/research.mjs";
+import { runPlan } from "./commands/plan.mjs";
+import { runWorkflow } from "./commands/run.mjs";
+import { runVerify } from "./commands/verify.mjs";
+import { runMemory, runRemember, runForget } from "./commands/memory.mjs";
+import { runBrowser } from "./commands/browser.mjs";
+import { runImport } from "./commands/import-bmad.mjs";
+import { runInstall } from "./commands/install.mjs";
+import { runDoctor } from "./commands/doctor.mjs";
+import { runConfig } from "./commands/config.mjs";
+
+export function main(argv = process.argv, cwd = process.cwd()) {
+  const [, , command, ...args] = argv;
+
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    printHelp();
+    return;
+  }
+
+  const root = findProjectRoot(cwd);
+  if (!root) {
+    fail("No .projects/PROJECT.md found from current directory upward.");
+  }
+
+  if (command === "status") return printStatus(root);
+  if (command === "commands") return printCommands();
+  if (command === "ask") return runAsk(root, args);
+  if (command === "research") return runResearch(root, args);
+  if (command === "plan") return runPlan(root, args);
+  if (command === "run") return runWorkflow(root, args);
+  if (command === "verify") return runVerify(root, args);
+  if (command === "memory") return runMemory(root, args);
+  if (command === "remember") return runRemember(root, args);
+  if (command === "forget") return runForget(root, args);
+  if (command === "browser") return runBrowser(root, args);
+  if (command === "import") return runImport(root, args);
+  if (command === "install") return runInstall(root, args);
+  if (command === "doctor") return runDoctor(root, args);
+  if (command === "config") return runConfig(root, args);
+
+  fail(`Unknown command: ${command}`);
+}
+
+export function printHelp() {
+  console.log(`taphelu command surface
+
+Usage:
+  dl status
+  dl commands
+  dl ask [--mode quick|standard|deep] [--approval-scope text] [--context path] [--write] <goal>
+  dl research [--source text] [--finding text] [--confidence low|medium|high] [--approval-scope text] [--write] <question>
+  dl plan [--task text] [--verification text] [--context path] [--write] <goal>
+  dl run [--source text] [--finding text] [--task text] [--verification text] [--write] <goal>
+  dl run --resume run-id [--write]
+  dl verify [--artifact path] [--test text] [--review-trigger text] [--reviewed] [--write] <goal>
+  dl memory [--category name] [--limit number] [--prune] [--write]
+  dl remember --category name [--source path] [--replace text] [--write] <memory>
+  dl forget [--category name] [--pattern text | --item text | --reset] [--write]
+  dl browser research --approval-scope text --url url --purpose text --observation text [--write]
+  dl browser verify --approval-scope text --url url --step text --expected text --actual text --result pass|fail|blocked [--write] <flow>
+  dl import bmad [--path _bmad-output] [--write]
+  dl install --runtime codex|claude|gemini|all --scope local|global [--config-dir path] [--dry-run|--write]
+  dl doctor --runtime codex|claude|gemini|all --scope local|global [--config-dir path]
+  dl config get [key]
+  dl config set testing.strictness low|medium|deep
+
+Commands:
+  status    Show current .projects state.
+  commands  Show stable command manifest.
+  ask       Produce a requirement packet from a goal.
+  research  Produce a research packet from findings and sources.
+  plan      Produce an executable plan packet.
+  run       Produce or record an end-to-end workflow run.
+  verify    Produce or record a verification verdict.
+  memory    Review or prune curated project memory.
+  remember  Add or update a durable memory item.
+  forget    Remove memory by category, exact item, pattern, or reset.
+  browser   Produce gated browser research or E2E verification reports.
+  import    Import external workflow context.
+  install   Generate Taphelu agent pack adapters for AI runtimes.
+  doctor    Validate generated Taphelu runtime adapters and MCP config.
+  config    Read or update project-local Taphelu config.
+`);
+}

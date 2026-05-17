@@ -1,0 +1,7 @@
+.samples/
+.projects/
+.codex/
+.claude
+.gemini/
+.mcp.json
+CLAUDE.md

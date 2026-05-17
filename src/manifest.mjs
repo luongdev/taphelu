@@ -1,0 +1,17 @@
+export const COMMAND_MANIFEST = [
+  { name: "status", usage: "dl status", summary: "Show current .projects state." },
+  { name: "commands", usage: "dl commands", summary: "Show stable command manifest." },
+  { name: "ask", usage: "dl ask [--mode quick|standard|deep] <goal>", summary: "Produce a requirement packet from a goal." },
+  { name: "research", usage: "dl research [--source text] [--finding text] <question>", summary: "Produce a research packet from findings and sources." },
+  { name: "plan", usage: "dl plan [--task text] [--verification text] <goal>", summary: "Produce an executable plan packet." },
+  { name: "run", usage: "dl run [--source text] [--finding text] <goal>", summary: "Produce or record an end-to-end workflow run." },
+  { name: "verify", usage: "dl verify [--artifact path] [--test text] [--review-trigger text] <goal>", summary: "Produce or record a verification verdict." },
+  { name: "memory", usage: "dl memory [--category name] [--prune]", summary: "Review or prune curated project memory." },
+  { name: "remember", usage: "dl remember --category name <memory>", summary: "Add or update a durable memory item." },
+  { name: "forget", usage: "dl forget [--category name] [--pattern text | --item text | --reset]", summary: "Remove curated memory by selector." },
+  { name: "browser", usage: "dl browser research|verify ...", summary: "Produce gated browser research or E2E verification reports." },
+  { name: "import", usage: "dl import bmad [--path _bmad-output]", summary: "Import external workflow context." },
+  { name: "install", usage: "dl install --runtime codex|claude|gemini|all --scope local|global [--write]", summary: "Generate runtime adapters from the canonical Taphelu agent pack." },
+  { name: "doctor", usage: "dl doctor --runtime codex|claude|gemini|all --scope local|global", summary: "Validate generated runtime adapters and MCP configuration." },
+  { name: "config", usage: "dl config get|set [key] [value]", summary: "Read or update project-local Taphelu config." },
+];
