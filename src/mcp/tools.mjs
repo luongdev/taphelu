@@ -4,7 +4,8 @@ import { findProjectRoot, readProjectFile, writeTextFileAtomic } from "../projec
 import { section, replaceSection } from "../utils.mjs";
 import { analyzeVerification, recordVerification } from "../commands/verify.mjs";
 import { analyzeContextCleanup, applyContextCleanup, publicContextCleanupSummary } from "../commands/cleanup.mjs";
-import { analyzeProjectScan, applyProjectScan } from "../commands/scan.mjs";
+import { analyzeDeepScanPlan, analyzeProjectScan, analyzeScanInterview, analyzeServiceTopology, applyDeepScanPlan, applyProjectScan, applyScanInterview, applyServiceTopology } from "../commands/scan.mjs";
+import { analyzeContextIndex, analyzeMilestoneCompaction, analyzePlanCompaction, analyzeRunsCompaction, applyContextIndex, applyMilestoneCompaction, applyPlanCompaction, applyRunsCompaction, getContextArtifact, publicCompactionSummary, publicContextIndexSummary, readExistingContextIndex, searchContextArtifacts } from "../context-store.mjs";
 import { evaluateCrossAiReview } from "../review-policy.mjs";
 import {
   captureL0,
@@ -31,6 +32,16 @@ export const TAPHELU_MCP_TOOLS = [
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
     query: stringSchema("Optional recall query to include relevant memory."),
     limit: numberSchema("Maximum memory records per layer."),
+  }),
+  tool("dl_context_store", "Index, search, fetch, or compact project context artifacts with preview-first writes.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    action: stringSchema("Action: index, search, get, or compact."),
+    query: stringSchema("Search query for action=search."),
+    id: stringSchema("Artifact id for action=get or milestone id for compact kind=milestone."),
+    kind: stringSchema("Compaction kind: milestone, runs, or plan."),
+    keep: numberSchema("Number of recent runs to keep for compact kind=runs."),
+    write: booleanSchema("Whether to write changes. Defaults to false preview."),
+    full: booleanSchema("For action=get, return full artifact content instead of a compact preview."),
   }),
   tool("dl_observe", "Record an agent/user/tool observation into L0 memory.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -88,11 +99,19 @@ export const TAPHELU_MCP_TOOLS = [
     review_evidence: arraySchema("Review evidence already collected."),
     reviewed: booleanSchema("Whether review has already happened."),
   }),
-  tool("dl_scan_project", "Scan an existing project into Taphelu context without source dumps.", {
+  tool("dl_scan_project", "Scan an existing project, ask domain interview questions, create deep-scan packets, or map services/contracts without source dumps.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    action: stringSchema("Action: scan, interview, plan, or map. Defaults to scan."),
+    focus: stringSchema("For action=map: services, contracts, topology, or all. Defaults to all."),
     path: stringSchema("Path under workspace to scan. Defaults to current project root."),
     mode: stringSchema("Scan mode: quick, standard, or deep."),
     write: booleanSchema("Whether to write .projects scan context. Defaults to false preview."),
+    domain: stringSchema("Domain/business answer for interview or plan context."),
+    user: arraySchema("Primary users, actors, or operators."),
+    core_flow: arraySchema("Core workflows that agents should preserve."),
+    objective: stringSchema("Scan objective: onboarding, refactor, bugfix, migration, architecture review, testing, etc."),
+    contract_source: arraySchema("Source of truth for API/service contracts."),
+    restricted_area: arraySchema("Sensitive, generated, off-limits, or low-value areas for deep scan."),
   }),
   tool("dl_memory_search", "Search L1/L2 structured memory with source IDs.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -125,7 +144,7 @@ export function listTapheluTools() {
 
 export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
   name = normalizeToolName(name);
-  const root = resolveRoot(args.cwd || serverCwd);
+  const root = resolveRootForTool(name, args.cwd || serverCwd);
 
   if (name === "dl_start") {
     const session = createSession(root, {
@@ -242,6 +261,11 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
       verification,
       record,
       cleanupRecommendation: publicContextCleanupSummary(analyzeContextCleanup(root, { limit: 5 })),
+      contextCompactionRecommendation: {
+        command: "dl compact milestone --id <milestone-id> --write",
+        mode: "suggest",
+        reason: "Closeout passed; compact completed work into indexed context before the next session.",
+      },
       nextRoute: "done",
     };
   }
@@ -268,17 +292,95 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
     };
   }
 
+  if (name === "dl_context_store") {
+    const action = String(args.action || "index").trim() || "index";
+    if (action === "index") {
+      const report = analyzeContextIndex(root);
+      if (args.write) applyContextIndex(root, report);
+      return {
+        action,
+        report: publicContextIndexSummary(report),
+        wrote: Boolean(args.write),
+        nextRoute: args.write ? "done" : "write_optional",
+      };
+    }
+    if (action === "search") {
+      const report = searchContextArtifacts(root, args.query || "");
+      return { action, report, nextRoute: report.nextRoute };
+    }
+    if (action === "get") {
+      const report = getContextArtifact(root, args.id || "", { full: Boolean(args.full) });
+      return { action, report, nextRoute: report.nextRoute };
+    }
+    if (action === "compact") {
+      const kind = String(args.kind || "").trim();
+      let report;
+      if (kind === "milestone") report = analyzeMilestoneCompaction(root, { id: args.id });
+      else if (kind === "runs") report = analyzeRunsCompaction(root, { keep: args.keep });
+      else if (kind === "plan") report = analyzePlanCompaction(root);
+      else userError("Invalid dl_context_store compact kind. Expected milestone, runs, or plan.");
+      if (args.write) {
+        if (kind === "milestone") applyMilestoneCompaction(root, report);
+        if (kind === "runs") applyRunsCompaction(root, report);
+        if (kind === "plan") applyPlanCompaction(root, report);
+      }
+      return {
+        action,
+        kind,
+        report: publicCompactionSummary(report),
+        wrote: Boolean(args.write),
+        nextRoute: args.write ? "done" : report.nextRoute,
+      };
+    }
+    userError("Invalid dl_context_store action. Expected index, search, get, or compact.");
+  }
+
   if (name === "dl_scan_project") {
-    const report = analyzeProjectScan(root, {
-      path: args.path || ".",
-      mode: args.mode || "standard",
-    });
-    if (args.write) applyProjectScan(root, report);
-    return {
-      report,
-      wrote: Boolean(args.write),
-      nextRoute: report.nextRoute,
-    };
+    const action = String(args.action || "scan").trim() || "scan";
+    if (action === "scan") {
+      const report = analyzeProjectScan(root, {
+        path: args.path || ".",
+        mode: args.mode || "standard",
+      });
+      if (args.write) applyProjectScan(root, report);
+      return {
+        action,
+        report,
+        wrote: Boolean(args.write),
+        nextRoute: report.nextRoute,
+      };
+    }
+    if (action === "interview") {
+      const report = analyzeScanInterview(root, args);
+      if (args.write) applyScanInterview(root, report);
+      return {
+        action,
+        report,
+        wrote: Boolean(args.write),
+        nextRoute: report.nextRoute,
+      };
+    }
+    if (action === "plan") {
+      const report = analyzeDeepScanPlan(root, args);
+      if (args.write) applyDeepScanPlan(root, report);
+      return {
+        action,
+        report,
+        wrote: Boolean(args.write),
+        nextRoute: report.nextRoute,
+      };
+    }
+    if (action === "map") {
+      const report = analyzeServiceTopology(root, args);
+      if (args.write) applyServiceTopology(root, report);
+      return {
+        action,
+        report,
+        wrote: Boolean(args.write),
+        nextRoute: report.nextRoute,
+      };
+    }
+    userError("Invalid dl_scan_project action. Expected scan, interview, plan, or map.");
   }
 
   if (name === "dl_conversation_search") {
@@ -299,8 +401,12 @@ export function buildCompactContext(root, query = "", limit = 5) {
   const state = readProjectFile(root, "STATE.md");
   const memory = readProjectFile(root, "MEMORY.md");
   const codebase = readProjectFile(root, "CODEBASE.md");
+  const contextDocument = readProjectFile(root, "CONTEXT.md");
+  const contextIndex = readExistingContextIndex(root) || { artifacts: [] };
   const recall = query ? recallMemory(root, { query, limit }) : recallMemory(root, { limit: 3 });
   return {
+    contextDocument,
+    contextArtifacts: contextIndex.artifacts.slice(0, 12),
     currentGoal: section(state, "Current Goal") || "",
     currentMilestone: section(state, "Current Milestone") || "",
     currentPhase: section(state, "Current Phase") || "",
@@ -355,8 +461,9 @@ function updateStateSection(root, heading, body) {
   writeTextFileAtomic(path, replaceSection(content, heading, body));
 }
 
-function resolveRoot(cwd) {
+function resolveRootForTool(name, cwd) {
   const root = findProjectRoot(cwd);
+  if (!root && name === "dl_scan_project") return cwd;
   if (!root) userError("No .projects/PROJECT.md found from current directory upward.");
   return root;
 }
@@ -430,6 +537,7 @@ function normalizeToolName(name) {
     taphelu_conversation_search: "dl_conversation_search",
     taphelu_memory_promote: "dl_memory_promote",
     taphelu_cleanup_context: "dl_cleanup_context",
+    taphelu_context_store: "dl_context_store",
     taphelu_review_status: "dl_review_status",
     taphelu_scan_project: "dl_scan_project",
   };

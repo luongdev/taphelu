@@ -1,6 +1,6 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -182,6 +182,8 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`scan`/);
   assert.match(result.stdout, /`review`/);
   assert.match(result.stdout, /`cleanup`/);
+  assert.match(result.stdout, /`context`/);
+  assert.match(result.stdout, /`compact`/);
   assert.match(result.stdout, /`config`/);
 });
 
@@ -194,6 +196,7 @@ test("mcp lists taphelu agent lifecycle tools", async () => {
   assert.ok(direct.includes("dl_recall"));
   assert.ok(direct.includes("dl_close"));
   assert.ok(direct.includes("dl_cleanup_context"));
+  assert.ok(direct.includes("dl_context_store"));
   assert.ok(direct.includes("dl_scan_project"));
   assert.equal(direct.includes("taphelu_start"), false);
   assert.equal(response.result.tools.some((tool) => tool.name === "dl_observe"), true);
@@ -234,7 +237,12 @@ test("mcp tool schemas expose handler-supported fields", () => {
     assert.ok(tools.dl_close.inputSchema.properties[field], `dl_close missing ${field}`);
   }
   assert.ok(tools.dl_cleanup_context.inputSchema.properties.write);
+  assert.ok(tools.dl_context_store.inputSchema.properties.action);
+  assert.ok(tools.dl_context_store.inputSchema.properties.kind);
   assert.ok(tools.dl_scan_project.inputSchema.properties.mode);
+  assert.ok(tools.dl_scan_project.inputSchema.properties.action);
+  assert.ok(tools.dl_scan_project.inputSchema.properties.focus);
+  assert.ok(tools.dl_scan_project.inputSchema.properties.core_flow);
 });
 
 test("project file transaction rolls back touched project files", () => {
@@ -562,6 +570,27 @@ test("config manages review policy and instruction budgets", () => {
   assert.equal(config.instructions.max_lines, 40);
 });
 
+test("config manages context store and compaction settings", () => {
+  const root = makeProject();
+  const setKind = run(root, ["config", "set", "context.store.kind", "external-dir"]);
+  const setPath = run(root, ["config", "set", "context.store.path", "../taphelu-context-store"]);
+  const setAfterClose = run(root, ["config", "set", "context.compaction.after_close", "auto"]);
+  const setKeep = run(root, ["config", "set", "context.compaction.keep_recent_runs", "2"]);
+  const setBudget = run(root, ["config", "set", "context.compaction.max_always_load_chars", "9000"]);
+  const config = JSON.parse(readFileSync(join(root, ".projects", "config.json"), "utf8"));
+
+  assert.equal(setKind.status, 0, setKind.stderr);
+  assert.equal(setPath.status, 0, setPath.stderr);
+  assert.equal(setAfterClose.status, 0, setAfterClose.stderr);
+  assert.equal(setKeep.status, 0, setKeep.stderr);
+  assert.equal(setBudget.status, 0, setBudget.stderr);
+  assert.equal(config.context.store.kind, "external-dir");
+  assert.equal(config.context.store.path, "../taphelu-context-store");
+  assert.equal(config.context.compaction.after_close, "auto");
+  assert.equal(config.context.compaction.keep_recent_runs, 2);
+  assert.equal(config.context.compaction.max_always_load_chars, 9000);
+});
+
 test("review policy asks permission for medium-plus Codex review", () => {
   const root = makeProject();
   const result = run(root, [
@@ -793,6 +822,154 @@ test("mcp cleanup context previews without raw file contents", () => {
   assert.equal(result.wrote, false);
   assert.ok(result.report.files.some((file) => file.name === "STATE.md"));
   assert.equal("after" in result.report.files[0], false);
+});
+
+test("context index previews and writes compact artifact index", () => {
+  const root = makeProject();
+  writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMilestone context store.\n");
+  writeFileSync(join(root, ".projects", "RAW.md"), "# Raw\n\napi_key=should-not-index-value\n");
+  const preview = run(root, ["context", "index"]);
+  const previewWroteContext = existsSync(join(root, ".projects", "CONTEXT.md"));
+  const write = run(root, ["context", "index", "--write"]);
+  const context = readFileSync(join(root, ".projects", "CONTEXT.md"), "utf8");
+  const index = JSON.parse(readFileSync(join(root, ".projects", "index.json"), "utf8"));
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /# Context Index Report/);
+  assert.equal(previewWroteContext, false);
+  assert.equal(write.status, 0, write.stderr);
+  assert.match(context, /## Load Policy/);
+  assert.match(context, /dl context search/);
+  assert.equal(index.schemaVersion, 1);
+  assert.ok(index.artifacts.some((artifact) => artifact.id === "roadmap:roadmap-md"));
+  assert.doesNotMatch(JSON.stringify(index), /should-not-index-value/);
+  assert.equal(events.at(-1).type, "context_indexed");
+});
+
+test("context search and get load only selected artifacts", () => {
+  const root = makeProject();
+  writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMilestone context store search target.\n");
+  const indexed = run(root, ["context", "index", "--write"]);
+  const search = run(root, ["context", "search", "context store"]);
+  const get = run(root, ["context", "get", "roadmap:roadmap-md"]);
+
+  assert.equal(indexed.status, 0, indexed.stderr);
+  assert.equal(search.status, 0, search.stderr);
+  assert.match(search.stdout, /roadmap:roadmap-md/);
+  assert.equal(get.status, 0, get.stderr);
+  assert.match(get.stdout, /# Context Artifact/);
+  assert.match(get.stdout, /Milestone context store search target/);
+});
+
+test("compact milestone writes summary and refreshes context index", () => {
+  const root = makeProject();
+  const result = run(root, ["compact", "milestone", "--id", "M24", "--write"]);
+  const summary = readFileSync(join(root, ".projects", "milestones", "M24", "SUMMARY.md"), "utf8");
+  const context = readFileSync(join(root, ".projects", "CONTEXT.md"), "utf8");
+  const index = JSON.parse(readFileSync(join(root, ".projects", "index.json"), "utf8"));
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(summary, /# Milestone M24 Summary/);
+  assert.match(context, /milestone:M24/);
+  assert.ok(index.artifacts.some((artifact) => artifact.id === "milestone:M24"));
+  assert.equal(events.some((event) => event.type === "milestone_compacted"), true);
+});
+
+test("compact runs splits run history into indexed artifacts", () => {
+  const root = makeProject();
+  appendFileSync(join(root, ".projects", "RUNS.md"), `| run-old | 2026-01-01 | Old | done |
+| run-new | 2026-01-02 | New | done |
+
+## run-old
+
+Old detail line.
+
+## run-new
+
+New detail line.
+`);
+  const result = run(root, ["compact", "runs", "--keep", "1", "--write"]);
+  const runs = readFileSync(join(root, ".projects", "RUNS.md"), "utf8");
+  const runIndex = readFileSync(join(root, ".projects", "runs", "INDEX.md"), "utf8");
+  const runOld = readFileSync(join(root, ".projects", "runs", "run-old.md"), "utf8");
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(runs, /Run details are stored as indexed artifacts/);
+  assert.doesNotMatch(runs, /Old detail line/);
+  assert.match(runs, /run-new/);
+  assert.doesNotMatch(runs, /run-old \| 2026/);
+  assert.match(runIndex, /run-old/);
+  assert.match(runOld, /Old detail line/);
+});
+
+test("compact plan archives active plan artifact", () => {
+  const root = makeProject();
+  mkdirSync(join(root, ".projects", "active"), { recursive: true });
+  writeFileSync(join(root, ".projects", "active", "PLAN.md"), "# Active Plan\n\nImplement context compaction.\n");
+  const result = run(root, ["compact", "plan", "--write"]);
+  const active = readFileSync(join(root, ".projects", "active", "PLAN.md"), "utf8");
+  const archived = readdirSync(join(root, ".projects", "archive", "plans"));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(active, /No active plan/);
+  assert.equal(archived.length, 1);
+  assert.match(readFileSync(join(root, ".projects", "archive", "plans", archived[0]), "utf8"), /Implement context compaction/);
+});
+
+test("external-dir context store writes heavy artifacts outside .projects", () => {
+  const root = makeProject();
+  const external = join(root, "..", "taphelu-external-context");
+  tempRoots.add(external);
+  const setKind = run(root, ["config", "set", "context.store.kind", "external-dir"]);
+  const setPath = run(root, ["config", "set", "context.store.path", external]);
+  const result = run(root, ["compact", "milestone", "--id", "M25", "--write"]);
+  const summaryPath = join(external, "milestones", "M25", "SUMMARY.md");
+  const context = readFileSync(join(root, ".projects", "CONTEXT.md"), "utf8");
+
+  assert.equal(setKind.status, 0, setKind.stderr);
+  assert.equal(setPath.status, 0, setPath.stderr);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(summaryPath), true);
+  assert.match(context, /taphelu-external-context/);
+});
+
+test("git-submodule context store validates git path before writing", () => {
+  const root = makeProject();
+  const setKind = run(root, ["config", "set", "context.store.kind", "git-submodule"]);
+  const setPath = run(root, ["config", "set", "context.store.path", "../missing-submodule"]);
+  const result = run(root, ["context", "index", "--write"]);
+
+  assert.equal(setKind.status, 0, setKind.stderr);
+  assert.equal(setPath.status, 0, setPath.stderr);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Expected an existing git worktree or submodule path/);
+});
+
+test("mcp context store indexes, searches, gets, and previews compaction", () => {
+  const root = makeProject();
+  writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMCP context store artifact.\n");
+  const indexed = callTapheluTool("dl_context_store", { cwd: root, action: "index", write: true });
+  const searched = callTapheluTool("dl_context_store", { cwd: root, action: "search", query: "MCP context" });
+  const got = callTapheluTool("dl_context_store", { cwd: root, action: "get", id: "roadmap:roadmap-md" });
+  const compact = callTapheluTool("dl_context_store", { cwd: root, action: "compact", kind: "milestone", id: "M24" });
+  const context = callTapheluTool("dl_context", { cwd: root });
+
+  assert.equal(indexed.wrote, true);
+  assert.ok(searched.report.results.some((artifact) => artifact.id === "roadmap:roadmap-md"));
+  assert.match(got.report.content, /MCP context store artifact/);
+  assert.equal(compact.wrote, false);
+  assert.ok(context.contextArtifacts.some((artifact) => artifact.id === "roadmap:roadmap-md"));
+  assert.doesNotMatch(JSON.stringify(context), /## run-/);
 });
 
 test("mcp tools/call wraps structured handler result", async () => {
@@ -1531,6 +1708,232 @@ test("scan write bootstraps project context only under .projects", () => {
   assert.equal(existsSync(join(root, "src", "index.js")), true);
 });
 
+test("scan interview works without .projects and asks targeted questions", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["scan", "interview", "--path", ".", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Project Domain Interview/);
+  assert.match(result.stdout, /What business\/domain does this project serve\?/);
+  assert.match(result.stdout, /Who are the primary users/);
+  assert.match(result.stdout, /Missing repo evidence/);
+  assert.equal(existsSync(join(root, ".projects")), false);
+});
+
+test("scan interview records domain context with answer flags", () => {
+  const root = makePlainRepo();
+  const result = run(root, [
+    "scan",
+    "interview",
+    "--domain",
+    "Developer workflow tooling",
+    "--user",
+    "AI-assisted developer",
+    "--core-flow",
+    "Resume implementation work",
+    "--objective",
+    "onboarding",
+    "--write",
+  ]);
+  const domain = readFileSync(join(root, ".projects", "DOMAIN.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Domain Context/);
+  assert.match(domain, /Developer workflow tooling/);
+  assert.match(domain, /AI-assisted developer/);
+  assert.equal(existsSync(join(root, ".projects", "PROJECT.md")), true);
+  assert.equal(events.at(-1).type, "domain_context_recorded");
+});
+
+test("scan plan emits parallel task packets", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["scan", "plan", "--path", ".", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Deep Scan Plan/);
+  assert.match(result.stdout, /### DS1 - stack/);
+  assert.match(result.stdout, /### DS6 - concerns/);
+  assert.match(result.stdout, /Parallel group: `1`/);
+  assert.match(result.stdout, /Testability\/evidence class: `artifact-check`/);
+  assert.equal(existsSync(join(root, ".projects")), false);
+});
+
+test("scan plan write creates scan plan and updates state", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["scan", "plan", "--mode", "quick", "--write"]);
+  const plan = readFileSync(join(root, ".projects", "SCAN-PLAN.md"), "utf8");
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(plan, /# Deep Scan Plan/);
+  assert.match(state, /Deep scan plan created/);
+  assert.equal(existsSync(join(root, ".projects", "PROJECT.md")), true);
+  assert.equal(events.at(-1).type, "scan_plan_created");
+});
+
+test("large repo scan plan recommends parallel deep scan", () => {
+  const root = makePlainRepo();
+  for (let index = 0; index < 320; index += 1) {
+    writeFileSync(join(root, "src", `file-${index}.js`), `export const value${index} = ${index};\n`);
+  }
+  const result = run(root, ["scan", "plan", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Large repo recommendation: yes; split work into parallel focus packets/);
+});
+
+test("api service scan plan adds services-contracts packet", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "docker-compose.yml"), "services:\n  api:\n    image: node:20\n");
+  writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: Test\n  version: 1.0.0\npaths: {}\n");
+  mkdirSync(join(root, "src", "routes"), { recursive: true });
+  writeFileSync(join(root, "src", "routes", "users.js"), "export const routes = [];\n");
+  const result = run(root, ["scan", "plan", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /services-contracts/);
+  assert.match(result.stdout, /Docker Compose/);
+  assert.match(result.stdout, /OpenAPI\/Swagger/);
+});
+
+test("scan map previews topology without requiring .projects", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["scan", "map", "--path", ".", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Service Topology Report/);
+  assert.match(result.stdout, /Services: 1/);
+  assert.match(result.stdout, /svc-root/);
+  assert.equal(existsSync(join(root, ".projects")), false);
+});
+
+test("scan focus alias maps services", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["scan", "--focus", "services", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Focus: `services`/);
+  assert.match(result.stdout, /## Services/);
+  assert.doesNotMatch(result.stdout, /## Contracts/);
+});
+
+test("scan map write creates topology bundle", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: Root API\n  version: 1.0.0\npaths: {}\n");
+  const result = run(root, ["scan", "map", "--mode", "quick", "--write"]);
+  const serviceMap = readFileSync(join(root, ".projects", "SERVICE-MAP.md"), "utf8");
+  const apiContracts = readFileSync(join(root, ".projects", "API-CONTRACTS.md"), "utf8");
+  const graphJson = JSON.parse(readFileSync(join(root, ".projects", "graphs", "service-graph.json"), "utf8"));
+  const graphMermaid = readFileSync(join(root, ".projects", "graphs", "service-graph.mmd"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(serviceMap, /# Service Map/);
+  assert.match(apiContracts, /openapi/);
+  assert.equal(graphJson.schemaVersion, 1);
+  assert.ok(graphJson.contracts.some((contract) => contract.protocol === "openapi"));
+  assert.match(graphMermaid, /flowchart LR/);
+  assert.equal(events.at(-1).type, "service_topology_mapped");
+});
+
+test("scan map detects workspace services and package dependency edges", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "apps", "web"), { recursive: true });
+  mkdirSync(join(root, "services", "api"), { recursive: true });
+  writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: ["apps/*", "services/*"] }, null, 2));
+  writeFileSync(join(root, "apps", "web", "package.json"), JSON.stringify({
+    name: "@demo/web",
+    dependencies: { "@demo/api": "workspace:*" },
+  }, null, 2));
+  writeFileSync(join(root, "services", "api", "package.json"), JSON.stringify({ name: "@demo/api" }, null, 2));
+  const result = run(root, ["scan", "map", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /apps\/web/);
+  assert.match(result.stdout, /services\/api/);
+  assert.match(result.stdout, /package_dependency/);
+});
+
+test("scan map detects compose depends_on edges", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "services", "api"), { recursive: true });
+  mkdirSync(join(root, "services", "worker"), { recursive: true });
+  writeFileSync(join(root, "services", "api", "package.json"), JSON.stringify({ name: "api" }));
+  writeFileSync(join(root, "services", "worker", "package.json"), JSON.stringify({ name: "worker" }));
+  writeFileSync(join(root, "docker-compose.yml"), "services:\n  worker:\n    depends_on:\n      - api\n  api:\n    image: node:20\n");
+  const result = run(root, ["scan", "map", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /depends_on/);
+  assert.match(result.stdout, /compose depends_on/);
+  assert.match(result.stdout, /`high`/);
+});
+
+test("scan map detects contract source types", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "services", "api", "routes"), { recursive: true });
+  writeFileSync(join(root, "services", "api", "package.json"), JSON.stringify({ name: "api" }));
+  writeFileSync(join(root, "services", "api", "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: API\n  version: 1.0.0\npaths: {}\n");
+  writeFileSync(join(root, "services", "api", "schema.graphql"), "type Query { ok: Boolean }\n");
+  writeFileSync(join(root, "services", "api", "service.proto"), "syntax = \"proto3\";\n");
+  writeFileSync(join(root, "services", "api", "asyncapi.yaml"), "asyncapi: 2.0.0\ninfo:\n  title: Events\n  version: 1.0.0\n");
+  writeFileSync(join(root, "services", "api", "routes", "users.js"), "export const users = [];\n");
+  const result = run(root, ["scan", "map", "--focus", "contracts", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /openapi/);
+  assert.match(result.stdout, /graphql/);
+  assert.match(result.stdout, /protobuf\/grpc/);
+  assert.match(result.stdout, /asyncapi/);
+  assert.match(result.stdout, /rest/);
+});
+
+test("scan map respects ignore files and labels inferred edges", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, ".agentignore"), "ignored-openapi.yaml\n");
+  writeFileSync(join(root, "ignored-openapi.yaml"), "openapi: 3.0.0\n");
+  writeFileSync(join(root, "docs", "api-contract.md"), "# API contract notes\n");
+  const result = run(root, ["scan", "map", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /ignored-openapi/);
+  assert.match(result.stdout, /docs\/api-contract\.md/);
+  assert.match(result.stdout, /inferred/);
+});
+
+test("scan interview does not write unsafe answer content", () => {
+  const root = makePlainRepo();
+  const result = run(root, [
+    "scan",
+    "interview",
+    "--domain",
+    "api_key=sk-should-not-be-written-because-it-is-a-secret",
+    "--user",
+    "developer",
+    "--write",
+  ]);
+  const domain = readFileSync(join(root, ".projects", "DOMAIN.md"), "utf8");
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(domain, /sk-should-not/);
+  assert.match(domain, /developer/);
+});
+
 test("import project reuses scan pipeline", () => {
   const root = makePlainRepo();
   const result = run(root, ["import", "project", "--mode", "quick", "--write"]);
@@ -1550,6 +1953,52 @@ test("mcp scan project can write and context includes codebase summary", () => {
 
   assert.equal(result.wrote, true);
   assert.match(context.codebaseSummary, /Files observed/);
+});
+
+test("mcp scan project supports interview and plan actions", () => {
+  const root = makePlainRepo();
+  const interview = callTapheluTool("dl_scan_project", {
+    cwd: root,
+    action: "interview",
+    mode: "quick",
+  });
+  const plan = callTapheluTool("taphelu_scan_project", {
+    cwd: root,
+    action: "plan",
+    mode: "quick",
+    domain: "Developer workflow tooling",
+    objective: "onboarding",
+  });
+
+  assert.equal(interview.action, "interview");
+  assert.equal(interview.report.kind, "domain_interview");
+  assert.ok(interview.report.questions.length >= 3);
+  assert.equal(plan.action, "plan");
+  assert.equal(plan.report.kind, "deep_scan_plan");
+  assert.ok(plan.report.tasks.some((task) => task.focusArea === "stack"));
+});
+
+test("mcp scan project supports map action and legacy alias", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: API\n  version: 1.0.0\npaths: {}\n");
+  const direct = callTapheluTool("dl_scan_project", {
+    cwd: root,
+    action: "map",
+    focus: "all",
+    mode: "quick",
+  });
+  const legacy = callTapheluTool("taphelu_scan_project", {
+    cwd: root,
+    action: "map",
+    focus: "contracts",
+    mode: "quick",
+  });
+
+  assert.equal(direct.action, "map");
+  assert.equal(direct.report.kind, "service_topology");
+  assert.ok(direct.report.services.length >= 1);
+  assert.ok(direct.report.contracts.some((contract) => contract.protocol === "openapi"));
+  assert.equal(legacy.report.focus, "contracts");
 });
 
 test("import bmad detects blockers", () => {

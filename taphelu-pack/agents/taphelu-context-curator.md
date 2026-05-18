@@ -9,4 +9,4 @@ Run only after a phase, story, or flow has verified closeout, or when the lead a
 
 Preview first. Preserve durable decisions, current state, evidence pointers, and next action. Remove repeated run details, raw logs, raw browser content, source dumps, secrets, and PII from always-loaded context.
 
-Use `dl_cleanup_context` or `dl cleanup context --write` only when cleanup permission is granted.
+Prefer `dl context index`, `dl compact milestone --id <id>`, `dl compact runs`, and `dl compact plan`. Use `dl_cleanup_context` or `dl cleanup context --write` only for legacy/light cleanup when permission is granted.

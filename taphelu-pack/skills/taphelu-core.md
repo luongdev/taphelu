@@ -16,7 +16,7 @@ Required flow:
 5. Record meaningful observations with `dl_observe`.
 6. Save resumable progress with `dl_checkpoint`.
 7. Close with `dl_close` only after verification evidence exists.
-8. After a passed closeout, ask whether to run `dl_cleanup_context`.
+8. After a passed closeout, ask whether to run `dl_context_store action=compact` or `dl compact milestone --id <id>`.
 
 When the host requires qualified MCP names, use `taphelu:dl_start` style names.
 

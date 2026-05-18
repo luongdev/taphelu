@@ -6,6 +6,8 @@ import { writeTextFileAtomic } from "./project.mjs";
 export const TESTING_STRICTNESS_LEVELS = ["low", "medium", "deep"];
 export const CROSS_AI_REVIEW_LEVELS = ["off", "requested-only", "medium-plus", "large-only", "always"];
 export const REVIEW_RUNTIMES = ["codex", "claude", "gemini"];
+export const CONTEXT_STORE_KINDS = ["project", "external-dir", "git-submodule"];
+export const CONTEXT_AFTER_CLOSE = ["suggest", "off", "auto"];
 
 export const DEFAULT_PROJECT_CONFIG = {
   testing: {
@@ -24,6 +26,17 @@ export const DEFAULT_PROJECT_CONFIG = {
   instructions: {
     max_lines: 80,
     max_chars: 6000,
+  },
+  context: {
+    store: {
+      kind: "project",
+      path: ".projects",
+    },
+    compaction: {
+      after_close: "suggest",
+      keep_recent_runs: 5,
+      max_always_load_chars: 12000,
+    },
   },
 };
 
@@ -69,6 +82,16 @@ export function parseCrossAiReviewLevel(value) {
   fail(`Invalid review.cross_ai.level: ${value}. Expected ${CROSS_AI_REVIEW_LEVELS.join(", ")}.`);
 }
 
+export function parseContextStoreKind(value) {
+  if (CONTEXT_STORE_KINDS.includes(value)) return value;
+  fail(`Invalid context.store.kind: ${value}. Expected ${CONTEXT_STORE_KINDS.join(", ")}.`);
+}
+
+export function parseContextAfterClose(value) {
+  if (CONTEXT_AFTER_CLOSE.includes(value)) return value;
+  fail(`Invalid context.compaction.after_close: ${value}. Expected ${CONTEXT_AFTER_CLOSE.join(", ")}.`);
+}
+
 function normalizeProjectConfig(config = {}) {
   const strictness = parseTestingStrictness(config.testing?.strictness || DEFAULT_PROJECT_CONFIG.testing.strictness);
   const level = parseCrossAiReviewLevel(config.review?.cross_ai?.level || DEFAULT_PROJECT_CONFIG.review.cross_ai.level);
@@ -92,6 +115,17 @@ function normalizeProjectConfig(config = {}) {
       max_lines: parsePositiveInteger(config.instructions?.max_lines ?? DEFAULT_PROJECT_CONFIG.instructions.max_lines, "instructions.max_lines"),
       max_chars: parsePositiveInteger(config.instructions?.max_chars ?? DEFAULT_PROJECT_CONFIG.instructions.max_chars, "instructions.max_chars"),
     },
+    context: {
+      store: {
+        kind: parseContextStoreKind(config.context?.store?.kind || DEFAULT_PROJECT_CONFIG.context.store.kind),
+        path: String(config.context?.store?.path || DEFAULT_PROJECT_CONFIG.context.store.path).trim() || DEFAULT_PROJECT_CONFIG.context.store.path,
+      },
+      compaction: {
+        after_close: parseContextAfterClose(config.context?.compaction?.after_close || DEFAULT_PROJECT_CONFIG.context.compaction.after_close),
+        keep_recent_runs: parsePositiveInteger(config.context?.compaction?.keep_recent_runs ?? DEFAULT_PROJECT_CONFIG.context.compaction.keep_recent_runs, "context.compaction.keep_recent_runs"),
+        max_always_load_chars: parsePositiveInteger(config.context?.compaction?.max_always_load_chars ?? DEFAULT_PROJECT_CONFIG.context.compaction.max_always_load_chars, "context.compaction.max_always_load_chars"),
+      },
+    },
   };
 }
 
@@ -112,6 +146,26 @@ function applyConfigValue(config, key, value) {
     config.instructions.max_chars = parsePositiveInteger(value, key);
     return;
   }
+  if (key === "context.store.kind") {
+    config.context.store.kind = parseContextStoreKind(value);
+    return;
+  }
+  if (key === "context.store.path") {
+    config.context.store.path = String(value).trim();
+    return;
+  }
+  if (key === "context.compaction.after_close") {
+    config.context.compaction.after_close = parseContextAfterClose(value);
+    return;
+  }
+  if (key === "context.compaction.keep_recent_runs") {
+    config.context.compaction.keep_recent_runs = parsePositiveInteger(value, key);
+    return;
+  }
+  if (key === "context.compaction.max_always_load_chars") {
+    config.context.compaction.max_always_load_chars = parsePositiveInteger(value, key);
+    return;
+  }
   const reviewerMatch = key.match(/^review\.cross_ai\.reviewers\.(codex|claude|gemini)\.(enabled|model|effort)$/);
   if (reviewerMatch) {
     const [, runtime, field] = reviewerMatch;
@@ -122,7 +176,7 @@ function applyConfigValue(config, key, value) {
     }
     return;
   }
-  fail(`Unsupported config key: ${key}. Supported keys: testing.strictness, review.cross_ai.level, review.cross_ai.reviewers.<codex|claude|gemini>.<enabled|model|effort>, instructions.max_lines, instructions.max_chars.`);
+  fail(`Unsupported config key: ${key}. Supported keys: testing.strictness, review.cross_ai.level, review.cross_ai.reviewers.<codex|claude|gemini>.<enabled|model|effort>, instructions.max_lines, instructions.max_chars, context.store.kind, context.store.path, context.compaction.after_close, context.compaction.keep_recent_runs, context.compaction.max_always_load_chars.`);
 }
 
 function getNested(config, key = "") {

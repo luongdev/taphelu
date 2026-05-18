@@ -41,7 +41,7 @@ If a runtime supports native agents, Taphelu generates native agent files. Other
 
 Cross-AI review is permission-gated. The lead asks before invoking another runtime and records skipped/requested/completed/blocked review status.
 
-The context curator runs after verified closeout to compact `.projects` and keep runtime instruction files small.
+The context curator runs after verified closeout to compact completed work into indexed artifacts. Default flow: `dl context index`, `dl compact milestone --id <id>`, `dl compact runs`, then resume future sessions from `CONTEXT.md` plus targeted `dl context search/get`.
 
 ## Testing Policy
 

@@ -14,6 +14,10 @@ export function parseArgs(args) {
       options["dry-run"] = true;
       continue;
     }
+    if (arg === "--full") {
+      options.full = true;
+      continue;
+    }
     if (arg === "--global") {
       options.scope = "global";
       continue;
@@ -37,6 +41,24 @@ export function parseArgs(args) {
     }
     if (arg === "--config-dir") {
       options["config-dir"] = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--id=")) {
+      options.id = arg.slice("--id=".length);
+      continue;
+    }
+    if (arg === "--id") {
+      options.id = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--keep=")) {
+      options.keep = arg.slice("--keep=".length);
+      continue;
+    }
+    if (arg === "--keep") {
+      options.keep = requiredValue(args, i, arg);
       i += 1;
       continue;
     }
@@ -356,6 +378,69 @@ export function parseArgs(args) {
     }
     if (arg === "--confidence") {
       options.confidence = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--focus=")) {
+      options.focus = arg.slice("--focus=".length);
+      continue;
+    }
+    if (arg === "--focus") {
+      options.focus = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--domain=")) {
+      options.domain = arg.slice("--domain=".length);
+      continue;
+    }
+    if (arg === "--domain") {
+      options.domain = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--objective=")) {
+      options.objective = arg.slice("--objective=".length);
+      continue;
+    }
+    if (arg === "--objective") {
+      options.objective = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--user=")) {
+      pushOption(options, "user", arg.slice("--user=".length));
+      continue;
+    }
+    if (arg === "--user") {
+      pushOption(options, "user", requiredValue(args, i, arg));
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--core-flow=")) {
+      pushOption(options, "core-flow", arg.slice("--core-flow=".length));
+      continue;
+    }
+    if (arg === "--core-flow") {
+      pushOption(options, "core-flow", requiredValue(args, i, arg));
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--contract-source=")) {
+      pushOption(options, "contract-source", arg.slice("--contract-source=".length));
+      continue;
+    }
+    if (arg === "--contract-source") {
+      pushOption(options, "contract-source", requiredValue(args, i, arg));
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--restricted-area=")) {
+      pushOption(options, "restricted-area", arg.slice("--restricted-area=".length));
+      continue;
+    }
+    if (arg === "--restricted-area") {
+      pushOption(options, "restricted-area", requiredValue(args, i, arg));
       i += 1;
       continue;
     }

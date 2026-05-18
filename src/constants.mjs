@@ -16,7 +16,14 @@ export const EVENT_TYPES = {
   BROWSER_VERIFICATION_RECORDED: "browser_verification_recorded",
   BMAD_IMPORTED: "bmad_imported",
   CONTEXT_CLEANED: "context_cleaned",
+  CONTEXT_INDEXED: "context_indexed",
+  MILESTONE_COMPACTED: "milestone_compacted",
+  RUNS_COMPACTED: "runs_compacted",
+  PLAN_ARCHIVED: "plan_archived",
   PROJECT_SCANNED: "project_scanned",
+  DOMAIN_CONTEXT_RECORDED: "domain_context_recorded",
+  SCAN_PLAN_CREATED: "scan_plan_created",
+  SERVICE_TOPOLOGY_MAPPED: "service_topology_mapped",
 };
 
 export const MEMORY_CATEGORIES = {

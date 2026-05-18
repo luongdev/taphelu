@@ -17,6 +17,17 @@ Default:
   "instructions": {
     "max_lines": 80,
     "max_chars": 6000
+  },
+  "context": {
+    "store": {
+      "kind": "project",
+      "path": ".projects"
+    },
+    "compaction": {
+      "after_close": "suggest",
+      "keep_recent_runs": 5,
+      "max_always_load_chars": 12000
+    }
   }
 }
 ```
@@ -32,6 +43,10 @@ dl config set testing.strictness deep
 dl config set review.cross_ai.level medium-plus
 dl config set review.cross_ai.reviewers.gemini.enabled true
 dl config set instructions.max_lines 80
+dl config set context.store.kind external-dir
+dl config set context.store.path ../taphelu-context
+dl config set context.compaction.after_close suggest
+dl config set context.compaction.keep_recent_runs 5
 ```
 
 Testing strictness:
@@ -51,3 +66,15 @@ Cross-AI review levels:
 - `always`: every closeout needs review evidence.
 
 Instruction budgets are warnings for `dl doctor instructions`; they keep `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and generated adapter files lean.
+
+Context store:
+
+- `project`: default; context artifacts live under `.projects`.
+- `external-dir`: heavy context artifacts live outside the repo.
+- `git-submodule`: path must already be a git worktree/submodule; Taphelu validates but does not create it.
+
+Context compaction:
+
+- `suggest`: default; after closeout, Taphelu recommends compaction.
+- `off`: no compaction recommendation.
+- `auto`: reserved for explicit automation; CLI still previews unless `--write` is passed.

@@ -16,6 +16,8 @@ import { runConfig } from "./commands/config.mjs";
 import { runReview } from "./commands/review.mjs";
 import { runCleanup } from "./commands/cleanup.mjs";
 import { runScan } from "./commands/scan.mjs";
+import { runContext } from "./commands/context.mjs";
+import { runCompact } from "./commands/compact.mjs";
 
 export function main(argv = process.argv, cwd = process.cwd()) {
   const [, , command, ...args] = argv;
@@ -48,6 +50,8 @@ export function main(argv = process.argv, cwd = process.cwd()) {
   if (command === "review") return runReview(root, args);
   if (command === "cleanup") return runCleanup(root, args);
   if (command === "scan") return runScan(root, args);
+  if (command === "context") return runContext(root, args);
+  if (command === "compact") return runCompact(root, args);
 
   fail(`Unknown command: ${command}`);
 }
@@ -78,8 +82,18 @@ Usage:
   dl import bmad [--path _bmad-output] [--write]
   dl import project [--path .] [--mode quick|standard|deep] [--write]
   dl scan [--path .] [--mode quick|standard|deep] [--dry-run|--write]
+  dl scan interview [--path .] [--mode quick|standard|deep] [--domain text] [--user text] [--core-flow text] [--objective text] [--write]
+  dl scan plan [--path .] [--mode quick|standard|deep] [--domain text] [--objective text] [--write]
+  dl scan map [--path .] [--mode quick|standard|deep] [--focus services|contracts|topology|all] [--write]
+  dl scan --focus services|contracts|topology|all [--path .] [--mode quick|standard|deep] [--write]
   dl review status|plan [--runtime codex|claude|gemini] [--review-trigger text] [--files n] [--commits n]
   dl cleanup context [--limit n] [--dry-run|--write]
+  dl context index [--write]
+  dl context search <query>
+  dl context get <id> [--full]
+  dl compact milestone --id M23 [--write]
+  dl compact runs [--keep n] [--write]
+  dl compact plan [--write]
   dl install --runtime codex|claude|gemini|all --scope local|global [--config-dir path] [--dry-run|--write]
   dl doctor --runtime codex|claude|gemini|all --scope local|global [--config-dir path]
   dl doctor instructions
@@ -102,6 +116,8 @@ Commands:
   scan      Scan an existing project into Taphelu context.
   review    Evaluate permission-gated cross-AI review policy.
   cleanup   Preview or write compact project context cleanup.
+  context   Index, search, or fetch project context artifacts.
+  compact   Compact milestone, run, or plan artifacts after closeout.
   install   Generate Taphelu agent pack adapters for AI runtimes.
   doctor    Validate generated Taphelu runtime adapters and MCP config.
   config    Read or update project-local Taphelu config.
