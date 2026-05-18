@@ -72,6 +72,14 @@ Package runtime E2E:
 npm run test:runtime-install
 ```
 
+Pre-publish guard:
+
+```bash
+npm run release:check
+```
+
+This command never publishes. It requires a clean git tree and npm login before running the release test gate.
+
 Existing unmanaged adapter files block installation. Remove them or migrate them before reinstalling.
 
 Instruction hygiene:

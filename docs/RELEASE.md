@@ -6,6 +6,16 @@ Publishing is manual. Do not run `npm publish` until the release has been review
 
 ## Pre-Publish Checks
 
+Run the full guard from a clean checkout:
+
+```bash
+npm run release:check
+```
+
+`release:check` does not publish. It verifies the working tree is clean, `@luongdev/taphelu@0.1.0` is not already published, npm auth is available, baseline tests pass, runtime install E2E passes, and the dry-run tarball has the expected contents.
+
+The expanded command sequence is:
+
 ```bash
 git status --short
 npm run check
@@ -22,6 +32,7 @@ Confirm the dry-run tarball includes:
 - `package.json`
 - `bin/`
 - `src/`
+- `scripts/`
 - `taphelu-pack/`
 - `docs/`
 
@@ -78,14 +89,24 @@ Record:
 Only after manual approval:
 
 ```bash
+npm login
 npm whoami
 npm publish --access public
 ```
 
-After publishing:
+## Post-Publish Smoke
+
+Use a temp prefix so the smoke test does not mutate the user's global install or runtime config:
 
 ```bash
 npm view @luongdev/taphelu version
-npm install -g @luongdev/taphelu
-dl commands
+TMP="$(mktemp -d)"
+npm install -g --prefix "$TMP/prefix" @luongdev/taphelu
+DL="$TMP/prefix/bin/dl"
+"$DL" commands
+"$DL" scan --path . --mode quick
+INSTALLED_ROOT="$(npm root -g --prefix "$TMP/prefix")/@luongdev/taphelu"
+node --check "$INSTALLED_ROOT/bin/taphelu-mcp.mjs"
+"$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --write
+"$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime"
 ```

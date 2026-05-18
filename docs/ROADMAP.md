@@ -4,8 +4,8 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, and runtime install E2E.
-- Next: manual publish approval and publish hardening.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, and pre-publish release guard.
+- Next: v0.1 npm release execution after manual approval.
 - Later: richer graph/index features.
 
 ## v0.1 - npm-ready Local CLI/MCP Package
@@ -16,15 +16,15 @@ Includes:
 
 - npm package metadata for `@luongdev/taphelu`.
 - Global CLI entrypoints: `dl` and `taphelu-mcp`.
-- Pack whitelist that includes `bin`, `src`, `taphelu-pack`, and `docs`.
+- Pack whitelist that includes `bin`, `src`, `scripts`, `taphelu-pack`, and `docs`.
 - README, LICENSE, install docs, and publish checklist.
-- Smoke tests for `npm pack`, temp global install, `dl commands`, `dl scan`, and MCP syntax.
+- Smoke tests for `npm pack`, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
 
 Done when:
 
 - A user can install from a packed tarball and run the CLI/MCP entrypoints.
 - The npm tarball excludes `.projects`, `.samples`, tests, caches, and local runtime files.
-- Publish remains an explicit manual step.
+- Publish remains an explicit manual step guarded by `npm run release:check`.
 
 ## v0.2 - Deep Project Import and Scan Planning
 
