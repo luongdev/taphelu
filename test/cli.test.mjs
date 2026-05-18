@@ -130,6 +130,10 @@ function mcpLfFrame(message) {
   return `Content-Length: ${Buffer.byteLength(json, "utf8")}\n\n${json}`;
 }
 
+function mcpJsonLine(message) {
+  return `${JSON.stringify(message)}\n`;
+}
+
 function parseMcpFrames(output) {
   const messages = [];
   let cursor = 0;
@@ -145,6 +149,10 @@ function parseMcpFrames(output) {
     cursor = end;
   }
   return messages;
+}
+
+function parseMcpJsonLines(output) {
+  return output.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
 function makeBmadFixture(root, options = {}) {
@@ -472,6 +480,38 @@ test("mcp stdio server accepts LF-only MCP headers", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(responses.length, 1);
   assert.ok(responses[0].result.tools.some((tool) => tool.name === "dl_start"));
+});
+
+test("mcp stdio server accepts Claude Code JSONL framing", () => {
+  const root = makeProject();
+  const input = [
+    mcpJsonLine({
+      jsonrpc: "2.0",
+      id: 0,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: { roots: {}, elicitation: {} },
+        clientInfo: { name: "claude-code", version: "2.1.143" },
+      },
+    }),
+    mcpJsonLine({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    mcpJsonLine({ jsonrpc: "2.0", id: 2, method: "resources/list" }),
+    mcpJsonLine({ jsonrpc: "2.0", id: 3, method: "prompts/list" }),
+  ].join("");
+  const result = spawnSync(process.execPath, [mcpPath], {
+    cwd: root,
+    input,
+    encoding: "utf8",
+  });
+  const responses = parseMcpJsonLines(result.stdout);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.equal(responses[0].result.serverInfo.name, "taphelu");
+  assert.ok(responses[1].result.tools.some((tool) => tool.name === "dl_scan_project"));
+  assert.deepEqual(responses[2].result.resources, []);
+  assert.deepEqual(responses[3].result.prompts, []);
 });
 
 test("mcp stdio server returns tool errors without exiting", () => {
