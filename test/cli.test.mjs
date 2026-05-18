@@ -192,6 +192,20 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`config`/);
 });
 
+test("commands and global runtime commands work without .projects", () => {
+  const root = makePlainRepo();
+  const configDir = join(root, "runtime-home");
+  const commands = run(root, ["commands"]);
+  const install = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", configDir]);
+
+  assert.equal(commands.status, 0, commands.stderr);
+  assert.match(commands.stdout, /# Command Manifest/);
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(doctor.stdout, /`PASS`/);
+});
+
 test("mcp lists taphelu agent lifecycle tools", async () => {
   const root = makeProject();
   const direct = listTapheluTools().map((tool) => tool.name);

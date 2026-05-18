@@ -57,6 +57,7 @@ export function main(argv = process.argv, cwd = process.cwd()) {
 }
 
 function bootstrapCommandRoot(command, args, cwd) {
+  if (command === "commands" || command === "install" || command === "doctor") return cwd;
   if (command === "scan") return cwd;
   if (command === "import" && args[0] === "project") return cwd;
   return null;
