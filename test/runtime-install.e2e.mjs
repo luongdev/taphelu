@@ -37,12 +37,30 @@ test("package tarball installs runtime adapters and validates MCP from installed
   assertMcpServerWorks(tapheluMcp, workspace);
 
   run(dl, ["install", "--runtime", "all", "--scope", "global", "--config-dir", runtimeHome, "--write"], { cwd: workspace });
-  const doctor = run(dl, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", runtimeHome], { cwd: workspace });
+  const doctor = run(dl, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", runtimeHome, "--live"], { cwd: workspace });
 
   assert.match(doctor.stdout, /`PASS`/);
+  assert.match(doctor.stdout, /Live MCP handshake and tools\/list passed/);
   assert.match(readFileSync(join(runtimeHome, "codex", "config.toml"), "utf8"), new RegExp(escapeRegExp("taphelu-mcp.mjs")));
-  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "gemini", "settings.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.match(readFileSync(join(runtimeHome, "claude", "commands", "dl-init.md"), "utf8"), /# Taphelu Init/);
+  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "claude", "settings.json"), "utf8")).statusLine.tapheluManaged, "1");
+  assert.equal(existsSync(join(runtimeHome, "codex", "hooks", "taphelu-statusline.mjs")), false);
+  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "codex", "taphelu-runtime.json"), "utf8")).taphelu.statusline.mode, "fallback");
+  const geminiSettingsPath = join(runtimeHome, "gemini", "settings.json");
+  const geminiSettings = existsSync(geminiSettingsPath)
+    ? JSON.parse(readFileSync(geminiSettingsPath, "utf8"))
+    : {};
+  assert.equal(geminiSettings.mcpServers?.taphelu, undefined);
+  assert.equal(existsSync(join(runtimeHome, "gemini", "hooks", "taphelu-statusline.mjs")), false);
+  const geminiRuntimeSettings = JSON.parse(readFileSync(join(runtimeHome, "gemini", "extensions", "taphelu", "taphelu-runtime.json"), "utf8"));
+  assert.equal(geminiRuntimeSettings.ui.footer.hideModelInfo, false);
+  assert.equal(geminiRuntimeSettings.ui.footer.hideContextPercentage, false);
+  assert.equal(geminiRuntimeSettings.taphelu.statusline.mode, "native-footer");
+  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "gemini", "extensions", "taphelu", "gemini-extension.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
   assert.equal(JSON.parse(readFileSync(join(runtimeHome, "kiro", "settings", "mcp.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.equal(existsSync(join(runtimeHome, "kiro", "hooks", "taphelu-statusline.mjs")), false);
+  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "kiro", "settings", "taphelu.json"), "utf8")).taphelu.statusline.mode, "native-tui");
+  assert.match(readFileSync(join(runtimeHome, "kiro", "skills", "dl-init", "SKILL.md"), "utf8"), /Invoke with \/dl-init/);
 });
 
 function makeWorkspace(root) {

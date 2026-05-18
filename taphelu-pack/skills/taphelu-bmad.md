@@ -1,6 +1,6 @@
 ---
 name: taphelu-bmad
-description: Use when reading BMAD planning artifacts and continuing work through Taphelu context.
+description: Use when reading BMAD planning artifacts and continuing work through Taphelu context. For GSD, Superpower, or generic imports, use taphelu-adapters.
 ---
 
 # Taphelu BMAD

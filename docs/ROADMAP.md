@@ -4,8 +4,9 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, and npm test build `0.1.0-build.1`.
-- Next: beta onboarding kit and structured feedback loop.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, and npm test build `0.1.0-build.1`.
+- Current: runtime orchestration kit, with Claude first, then Kiro/Codex/Gemini fallback hardening.
+- Next: beta feedback-driven fixes.
 - Later: richer graph/index features.
 
 ## v0.1 - npm-ready Local CLI/MCP Package
@@ -34,7 +35,7 @@ Goal: help beta testers try Taphelu on real repositories and report actionable f
 Includes:
 
 - `docs/BETA-TEST.md` with install, scan, runtime adapter, cleanup, and feedback steps.
-- Codex-first runtime adapter smoke path, with Claude, Gemini, and Kiro variants.
+- Claude-first runtime adapter smoke path, with Kiro, Codex, and Gemini variants.
 - Feedback template covering environment, repo type, commands, expected/actual result, and `dl doctor` status.
 
 Done when:
@@ -73,6 +74,7 @@ Includes:
 - Context store v2 with `.projects/CONTEXT.md`, `.projects/index.json`, artifact search/get, and milestone/run/plan compaction.
 - Runtime install E2E for Codex, Claude, Gemini, and Kiro using temp homes/config dirs.
 - `dl doctor` validation for MCP config, generated adapter files, instruction hygiene, and package install health.
+- Runtime orchestration kit: skills, agents or role fallbacks, `/dl-*` commands, hooks, capability-based status surfaces, and live doctor.
 
 Done when:
 

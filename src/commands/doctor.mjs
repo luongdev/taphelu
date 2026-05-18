@@ -12,12 +12,16 @@ export function runDoctor(root, rawArgs) {
     return;
   }
   const { options, values } = parseArgs(rawArgs);
-  if (values.length) fail("Unexpected positional value for dl doctor. Use --runtime, --scope, or --config-dir.");
+  if (values.length) fail("Unexpected positional value for dl doctor. Use --runtime, --scope, --config-dir, --profile, --hooks, --statusline, or --live.");
 
   const report = inspectInstall(root, {
     runtime: options.runtime || "all",
     scope: options.scope || "local",
     configDir: options["config-dir"] || "",
+    profile: options.profile || "full-auto",
+    hooks: options.hooks,
+    statusline: options.statusline,
+    live: Boolean(options.live),
   });
 
   console.log(buildDoctorReport(report));
@@ -38,6 +42,9 @@ function buildDoctorReport(report) {
 
 - Runtimes: ${report.runtimes.join(", ")}
 - Scope: ${report.scope}
+- Profile: ${report.profile}
+- Hooks: ${report.hooks}
+- Statusline: ${report.statusline}
 
 ## Checks
 

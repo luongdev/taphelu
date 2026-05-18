@@ -9,7 +9,7 @@ import { runWorkflow } from "./commands/run.mjs";
 import { runVerify } from "./commands/verify.mjs";
 import { runMemory, runRemember, runForget } from "./commands/memory.mjs";
 import { runBrowser } from "./commands/browser.mjs";
-import { runImport } from "./commands/import-bmad.mjs";
+import { runImport } from "./commands/import.mjs";
 import { runInstall } from "./commands/install.mjs";
 import { runDoctor } from "./commands/doctor.mjs";
 import { runConfig } from "./commands/config.mjs";
@@ -18,6 +18,7 @@ import { runCleanup } from "./commands/cleanup.mjs";
 import { runScan } from "./commands/scan.mjs";
 import { runContext } from "./commands/context.mjs";
 import { runCompact } from "./commands/compact.mjs";
+import { runRuntime } from "./commands/runtime.mjs";
 
 export function main(argv = process.argv, cwd = process.cwd()) {
   const [, , command, ...args] = argv;
@@ -52,12 +53,13 @@ export function main(argv = process.argv, cwd = process.cwd()) {
   if (command === "scan") return runScan(root, args);
   if (command === "context") return runContext(root, args);
   if (command === "compact") return runCompact(root, args);
+  if (command === "runtime") return runRuntime(root, args);
 
   fail(`Unknown command: ${command}`);
 }
 
 function bootstrapCommandRoot(command, args, cwd) {
-  if (command === "commands" || command === "install" || command === "doctor") return cwd;
+  if (command === "commands" || command === "install" || command === "doctor" || command === "runtime") return cwd;
   if (command === "scan") return cwd;
   if (command === "import" && args[0] === "project") return cwd;
   return null;
@@ -81,6 +83,8 @@ Usage:
   dl browser research --approval-scope text --url url --purpose text --observation text [--write]
   dl browser verify --approval-scope text --url url --step text --expected text --actual text --result pass|fail|blocked [--write] <flow>
   dl import bmad [--path _bmad-output] [--write]
+  dl import gsd [--path .planning] [--write]
+  dl import superpower [--path superpowers] [--write]
   dl import project [--path .] [--mode quick|standard|deep] [--write]
   dl scan [--path .] [--mode quick|standard|deep] [--dry-run|--write]
   dl scan interview [--path .] [--mode quick|standard|deep] [--domain text] [--user text] [--core-flow text] [--objective text] [--write]
@@ -95,9 +99,10 @@ Usage:
   dl compact milestone --id M23 [--write]
   dl compact runs [--keep n] [--write]
   dl compact plan [--write]
-  dl install --runtime codex|claude|gemini|kiro|all --scope local|global [--config-dir path] [--dry-run|--write]
-  dl doctor --runtime codex|claude|gemini|kiro|all --scope local|global [--config-dir path]
+  dl install --runtime claude|kiro|codex|gemini|all --scope local|global [--profile minimal|core|full-auto] [--hooks off|observe|guarded|strict] [--statusline off|on] [--config-dir path] [--dry-run|--write]
+  dl doctor --runtime claude|kiro|codex|gemini|all --scope local|global [--config-dir path] [--live]
   dl doctor instructions
+  dl runtime status --runtime claude|kiro|codex|gemini|all --scope local|global [--live]
   dl config get [key]
   dl config set testing.strictness low|medium|deep
 
@@ -121,6 +126,7 @@ Commands:
   compact   Compact milestone, run, or plan artifacts after closeout.
   install   Generate Taphelu agent pack adapters for AI runtimes.
   doctor    Validate generated Taphelu runtime adapters and MCP config.
+  runtime   Show runtime adapter and live MCP health.
   config    Read or update project-local Taphelu config.
 `);
 }

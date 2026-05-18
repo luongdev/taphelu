@@ -34,10 +34,12 @@ Beta testing:
 
 Taphelu install is generated from `taphelu-pack`.
 
+Default install profile for beta is `full-auto`: MCP, skills, agents/role fallbacks, slash/init commands, guarded hooks, and runtime-appropriate status. Claude gets a native `statusLine`; Gemini keeps native footer model/context visible; Kiro uses its native TUI status plus `/dl-status`; Codex uses `/dl-status` fallback.
+
 Dry run first:
 
 ```bash
-dl install --runtime all --scope local --dry-run
+dl install --runtime all --scope local --profile full-auto --hooks strict --statusline on --dry-run
 ```
 
 Apply:
@@ -46,13 +48,13 @@ Apply:
 dl install --runtime all --scope local --write
 ```
 
-Global install:
+Global install, recommended order:
 
 ```bash
-dl install --runtime codex --scope global --write
 dl install --runtime claude --scope global --write
-dl install --runtime gemini --scope global --write
 dl install --runtime kiro --scope global --write
+dl install --runtime codex --scope global --write
+dl install --runtime gemini --scope global --write
 ```
 
 Config roots:
@@ -68,10 +70,12 @@ Claude Code can also register the MCP server through its own CLI:
 NODE_BIN="$(command -v node)"
 MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
 claude mcp add -e TAPHELU_MANAGED=1 --transport stdio --scope user taphelu -- "$NODE_BIN" "$MCP_BIN"
-dl doctor --runtime claude --scope global
+dl doctor --runtime claude --scope global --live
 ```
 
 Restart Claude Code after changing user-scope MCP config if it was already running.
+If Claude stays `connecting...`, run `dl doctor --runtime claude --scope global --live`. It checks stale MCP paths, non-absolute `node` commands, local config shadowing, and a live MCP handshake.
+Claude MCP config is separate from Claude settings: MCP entries use `.mcp.json` or `~/.claude.json`; hooks and `statusLine` use Claude `settings.json`.
 
 Kiro can also register the MCP server through its CLI:
 
@@ -85,18 +89,24 @@ For tests or custom config roots:
 
 ```bash
 dl install --runtime all --scope global --config-dir /tmp/taphelu-runtime --write
-dl doctor --runtime all --scope global --config-dir /tmp/taphelu-runtime
+dl doctor --runtime all --scope global --config-dir /tmp/taphelu-runtime --live
 ```
 
 Generated runtime paths under a custom config dir:
 
-- `--runtime codex`: `/tmp/taphelu-runtime/config.toml` and `/tmp/taphelu-runtime/skills/`
-- `--runtime claude`: `/tmp/taphelu-runtime/.mcp.json`, `/tmp/taphelu-runtime/skills/`, and `/tmp/taphelu-runtime/agents/`
-- `--runtime gemini`: `/tmp/taphelu-runtime/settings.json` and `/tmp/taphelu-runtime/skills/`
-- `--runtime kiro`: `/tmp/taphelu-runtime/settings/mcp.json`, `/tmp/taphelu-runtime/skills/`, and `/tmp/taphelu-runtime/agents/`
-- `--runtime all`: `/tmp/taphelu-runtime/codex`, `/tmp/taphelu-runtime/claude`, `/tmp/taphelu-runtime/gemini`, and `/tmp/taphelu-runtime/kiro`
+- `--runtime codex`: `config.toml`, `skills/`, `commands/`, `AGENTS.md`, and `/dl-status` fallback metadata.
+- `--runtime claude`: `.mcp.json`, `skills/`, `agents/`, `commands/`, `hooks/`, and `settings.json` with hooks/statusLine.
+- `--runtime gemini`: `settings.json`, `skills/`, and `extensions/taphelu/` with `gemini-extension.json`, commands, context, and footer settings for model/context display.
+- `--runtime kiro`: `settings/mcp.json`, `skills/`, `agents`, hooks, native-TUI status metadata, and skill-based `/dl-*` commands.
+- `--runtime all`: `/tmp/taphelu-runtime/claude`, `/tmp/taphelu-runtime/kiro`, `/tmp/taphelu-runtime/codex`, and `/tmp/taphelu-runtime/gemini`
 
-`dl doctor` validates managed markers and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs`.
+`dl doctor` validates managed markers, hooks/status files or fallback metadata, local/global shadowing, and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs` or uses non-absolute `node`.
+
+Runtime status:
+
+```bash
+dl runtime status --runtime claude --scope global --live
+```
 
 Package runtime E2E:
 

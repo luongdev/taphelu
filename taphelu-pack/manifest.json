@@ -6,8 +6,20 @@
   "mcp": "mcp.json",
   "profiles": {
     "core": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context"],
-    "full": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context", "taphelu-browser", "taphelu-bmad"]
+    "full": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context", "taphelu-browser", "taphelu-bmad", "taphelu-adapters"]
   },
+  "commands": [
+    { "name": "dl-init", "path": "commands/dl-init.md", "summary": "Start Taphelu lifecycle and bootstrap existing project context." },
+    { "name": "dl-resume", "path": "commands/dl-resume.md", "summary": "Resume from compact Taphelu context and relevant memory." },
+    { "name": "dl-scan", "path": "commands/dl-scan.md", "summary": "Scan or import an existing project before planning." },
+    { "name": "dl-plan", "path": "commands/dl-plan.md", "summary": "Create parallel task contracts and route QA testability review." },
+    { "name": "dl-close", "path": "commands/dl-close.md", "summary": "Verify, close, and recommend context compaction." },
+    { "name": "dl-status", "path": "commands/dl-status.md", "summary": "Show compact Taphelu runtime status." }
+  ],
+  "hooks": [
+    { "name": "taphelu-runtime-hook", "path": "hooks/taphelu-runtime-hook.mjs" }
+  ],
+  "statusline": { "name": "taphelu-statusline", "path": "hooks/taphelu-statusline.mjs" },
   "skills": [
     { "name": "taphelu-core", "path": "skills/taphelu-core.md" },
     { "name": "taphelu-workflow", "path": "skills/taphelu-workflow.md" },
@@ -15,20 +27,21 @@
     { "name": "taphelu-verify", "path": "skills/taphelu-verify.md" },
     { "name": "taphelu-context", "path": "skills/taphelu-context.md" },
     { "name": "taphelu-browser", "path": "skills/taphelu-browser.md" },
-    { "name": "taphelu-bmad", "path": "skills/taphelu-bmad.md" }
+    { "name": "taphelu-bmad", "path": "skills/taphelu-bmad.md" },
+    { "name": "taphelu-adapters", "path": "skills/taphelu-adapters.md" }
   ],
   "agents": [
-    { "name": "taphelu-lead", "path": "agents/taphelu-lead.md" },
-    { "name": "taphelu-analyst", "path": "agents/taphelu-analyst.md" },
-    { "name": "taphelu-planner", "path": "agents/taphelu-planner.md" },
-    { "name": "taphelu-architect", "path": "agents/taphelu-architect.md" },
-    { "name": "taphelu-dev", "path": "agents/taphelu-dev.md" },
-    { "name": "taphelu-qa", "path": "agents/taphelu-qa.md" },
-    { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md" },
-    { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md" },
-    { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md" },
-    { "name": "taphelu-context-curator", "path": "agents/taphelu-context-curator.md" },
-    { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md" }
+    { "name": "taphelu-lead", "path": "agents/taphelu-lead.md", "requiredSkills": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context"], "mcpTools": ["dl_start", "dl_context", "dl_checkpoint", "dl_close"], "canDelegate": true, "closeoutGate": true },
+    { "name": "taphelu-analyst", "path": "agents/taphelu-analyst.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_observe"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-planner", "path": "agents/taphelu-planner.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_recall", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-architect", "path": "agents/taphelu-architect.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_recall"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-dev", "path": "agents/taphelu-dev.md", "requiredSkills": ["taphelu-core", "taphelu-workflow"], "mcpTools": ["dl_observe", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-qa", "path": "agents/taphelu-qa.md", "requiredSkills": ["taphelu-verify"], "mcpTools": ["dl_context", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
+    { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_observe"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md", "requiredSkills": ["taphelu-browser", "taphelu-verify"], "mcpTools": ["dl_context", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
+    { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md", "requiredSkills": ["taphelu-memory"], "mcpTools": ["dl_observe", "dl_memory_promote", "dl_memory_search"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-context-curator", "path": "agents/taphelu-context-curator.md", "requiredSkills": ["taphelu-context"], "mcpTools": ["dl_context_store", "dl_cleanup_context"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md", "requiredSkills": ["taphelu-adapters", "taphelu-workflow"], "mcpTools": ["dl_scan_project", "dl_context_store"], "canDelegate": false, "closeoutGate": false }
   ],
   "runtimes": {
     "codex": {

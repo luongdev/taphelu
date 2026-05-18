@@ -22,6 +22,14 @@ Alias:
 dl import project --path . --mode standard --write
 ```
 
+Known workflow imports:
+
+```bash
+dl import bmad --path _bmad-output --write
+dl import gsd --path .planning --write
+dl import superpower --path superpowers --write
+```
+
 Scan records compact evidence only:
 
 - package/build files

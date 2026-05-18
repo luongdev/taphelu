@@ -53,20 +53,31 @@ These commands should print reports and should not write project files unless yo
 
 ## Runtime Adapter Test
 
-Codex is the recommended first runtime path:
-
-```bash
-dl install --runtime codex --scope global --dry-run
-dl install --runtime codex --scope global --write
-dl doctor --runtime codex --scope global
-```
-
-Claude:
+Claude is the recommended first runtime path:
 
 ```bash
 dl install --runtime claude --scope global --dry-run
 dl install --runtime claude --scope global --write
-dl doctor --runtime claude --scope global
+dl doctor --runtime claude --scope global --live
+dl runtime status --runtime claude --scope global --live
+```
+
+If Claude shows `connecting...`, include the `dl doctor --runtime claude --scope global --live` output in feedback. It should identify stale paths, local config shadowing, or non-absolute `node` commands.
+
+Kiro:
+
+```bash
+dl install --runtime kiro --scope global --dry-run
+dl install --runtime kiro --scope global --write
+dl doctor --runtime kiro --scope global --live
+```
+
+Codex:
+
+```bash
+dl install --runtime codex --scope global --dry-run
+dl install --runtime codex --scope global --write
+dl doctor --runtime codex --scope global --live
 ```
 
 Gemini:
@@ -74,15 +85,7 @@ Gemini:
 ```bash
 dl install --runtime gemini --scope global --dry-run
 dl install --runtime gemini --scope global --write
-dl doctor --runtime gemini --scope global
-```
-
-Kiro:
-
-```bash
-dl install --runtime kiro --scope global --dry-run
-dl install --runtime kiro --scope global --write
-dl doctor --runtime kiro --scope global
+dl doctor --runtime gemini --scope global --live
 ```
 
 If install is blocked by unmanaged files, do not overwrite them manually. Save the `dl doctor` output and include it in feedback.

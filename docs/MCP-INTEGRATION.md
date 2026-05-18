@@ -6,7 +6,7 @@ Taphelu exposes a stdio MCP server:
 node /path/to/taphelu/bin/taphelu-mcp.mjs
 ```
 
-When installed from npm, `dl install` generates MCP entries that point to the installed package's `bin/taphelu-mcp.mjs`. Run `dl doctor --runtime all --scope global --config-dir <tmp-or-runtime-dir>` to verify managed adapter files and stale MCP paths.
+When installed from npm, `dl install` generates MCP entries that point to the installed package's `bin/taphelu-mcp.mjs`. Run `dl doctor --runtime all --scope global --config-dir <tmp-or-runtime-dir> --live` to verify managed adapter files, stale MCP paths, non-absolute `node` commands, local config shadowing, and a live MCP handshake.
 
 Primary tools:
 
@@ -60,18 +60,21 @@ Use its `action` field for onboarding flow:
 Generate runtime adapters:
 
 ```bash
-dl install --runtime codex --scope local --write
 dl install --runtime claude --scope local --write
-dl install --runtime gemini --scope local --write
 dl install --runtime kiro --scope local --write
+dl install --runtime codex --scope local --write
+dl install --runtime gemini --scope local --write
 dl install --runtime all --scope local --write
 ```
 
 Validate:
 
 ```bash
-dl doctor --runtime all --scope local
+dl doctor --runtime all --scope local --live
+dl runtime status --runtime all --scope local
 ```
+
+`full-auto` install generates MCP config, skills, agents or role-as-skill fallbacks, `/dl-*` commands, hooks, and runtime-appropriate status integration. Claude uses native `statusLine`; Gemini uses native footer model/context settings; Kiro keeps native TUI status with `/dl-status` for Taphelu state; Codex uses `/dl-status` fallback. Claude should be hardened first; Kiro, Codex, and Gemini follow with their supported surfaces.
 
 ## Direct Client Commands
 

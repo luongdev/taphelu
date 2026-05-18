@@ -5,12 +5,15 @@ import { escapeTable, formatList } from "../utils.mjs";
 
 export function runInstall(root, rawArgs) {
   const { options, values } = parseArgs(rawArgs);
-  if (values.length) fail("Unexpected positional value for dl install. Use --runtime, --scope, --config-dir, --dry-run, or --write.");
+  if (values.length) fail("Unexpected positional value for dl install. Use --runtime, --scope, --config-dir, --profile, --hooks, --statusline, --dry-run, or --write.");
 
   const plan = buildInstallPlan(root, {
     runtime: options.runtime || "all",
     scope: options.scope || "local",
     configDir: options["config-dir"] || "",
+    profile: options.profile || "full-auto",
+    hooks: options.hooks,
+    statusline: options.statusline,
   });
   const willWrite = Boolean(options.write) && !options["dry-run"];
 
@@ -42,6 +45,9 @@ ${didWrite ? "write" : "dry-run"}
 - Version: ${plan.pack.version}
 - Scope: ${plan.scope}
 - Runtimes: ${plan.runtimes.join(", ")}
+- Profile: ${plan.profile}
+- Hooks: ${plan.hooks}
+- Statusline: ${plan.statusline}
 
 ## Generated Files
 

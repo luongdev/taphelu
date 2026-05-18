@@ -14,6 +14,10 @@ export function parseArgs(args) {
       options["dry-run"] = true;
       continue;
     }
+    if (arg === "--live") {
+      options.live = true;
+      continue;
+    }
     if (arg === "--full") {
       options.full = true;
       continue;
@@ -59,6 +63,33 @@ export function parseArgs(args) {
     }
     if (arg === "--config-dir") {
       options["config-dir"] = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--profile=")) {
+      options.profile = arg.slice("--profile=".length);
+      continue;
+    }
+    if (arg === "--profile") {
+      options.profile = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--hooks=")) {
+      options.hooks = arg.slice("--hooks=".length);
+      continue;
+    }
+    if (arg === "--hooks") {
+      options.hooks = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--statusline=")) {
+      options.statusline = arg.slice("--statusline=".length);
+      continue;
+    }
+    if (arg === "--statusline") {
+      options.statusline = requiredValue(args, i, arg);
       i += 1;
       continue;
     }

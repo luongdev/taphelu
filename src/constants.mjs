@@ -15,6 +15,8 @@ export const EVENT_TYPES = {
   BROWSER_RESEARCH_RECORDED: "browser_research_recorded",
   BROWSER_VERIFICATION_RECORDED: "browser_verification_recorded",
   BMAD_IMPORTED: "bmad_imported",
+  GSD_IMPORTED: "gsd_imported",
+  SUPERPOWER_IMPORTED: "superpower_imported",
   CONTEXT_CLEANED: "context_cleaned",
   CONTEXT_INDEXED: "context_indexed",
   MILESTONE_COMPACTED: "milestone_compacted",

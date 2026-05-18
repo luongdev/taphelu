@@ -446,7 +446,7 @@ function updateStateFile(root, run, now) {
   content = replaceSection(
     content,
     "Current Phase",
-    `\`$dl run\` executed with lifecycle \`${run.lifecycleState}\` and verification verdict \`${run.verification.verdict}\`.\n\nImplemented commands: ${implementedCommands()}.`
+    `\`dl run\` executed with lifecycle \`${run.lifecycleState}\` and verification verdict \`${run.verification.verdict}\`.\n\nImplemented commands: ${implementedCommands()}.`
   );
   content = replaceSection(content, "Blockers", run.blockers.length ? formatList(run.blockers, "") : "None.");
   content = replaceSection(content, "Next Action", run.nextAction);

@@ -173,6 +173,33 @@ function makeBmadFixture(root, options = {}) {
   return base;
 }
 
+function makeGsdFixture(root, options = {}) {
+  const base = join(root, ".planning");
+  mkdirSync(join(base, "plans"), { recursive: true });
+  mkdirSync(join(base, "phases"), { recursive: true });
+  writeFileSync(join(base, "PROJECT.md"), "# GSD Project\n\nA GSD imported project goal.\n");
+  writeFileSync(join(base, "ROADMAP.md"), "# GSD Roadmap\n\n- Continue phase 1.\n");
+  writeFileSync(join(base, "STATE.md"), "# GSD State\n\nCurrent phase active.\n");
+  writeFileSync(join(base, "MEMORY.md"), "# GSD Memory\n\n- Durable GSD decision.\n");
+  writeFileSync(join(base, "plans", "PLAN.md"), "# Plan\n\n- Execute task.\n");
+  writeFileSync(join(base, "phases", "phase-1.md"), "# Phase 1\n\n- Build feature.\n");
+  if (options.blocker) {
+    writeFileSync(join(base, "ROADMAP.md"), "# GSD Roadmap\n\nBlocker: imported phase conflicts.\n");
+  }
+  return base;
+}
+
+function makeSuperpowerFixture(root) {
+  const base = join(root, "superpowers");
+  mkdirSync(join(base, "skills", "karpathy-guidelines"), { recursive: true });
+  writeFileSync(join(base, "README.md"), "# Superpowers\n\nA methodology pack for agent work.\n");
+  writeFileSync(join(base, "CLAUDE.md"), "# Claude Guidance\n\n- Keep plans simple.\n");
+  writeFileSync(join(base, "CURSOR.md"), "# Cursor Guidance\n\n- Prefer compact context.\n");
+  writeFileSync(join(base, "EXAMPLES.md"), "# Examples\n\n- Use testable workflows.\n");
+  writeFileSync(join(base, "skills", "karpathy-guidelines", "SKILL.md"), "# Karpathy Guidelines\n\n- Verify with examples.\n");
+  return base;
+}
+
 test("status reads project state", () => {
   const root = makeProject();
   const result = run(root, ["status"]);
@@ -387,7 +414,7 @@ test("canonical agent pack validates one source for skills and agents", () => {
   const plan = buildInstallPlan(makeProject(), { runtime: "all", scope: "local" });
 
   assert.equal(pack.manifest.name, "taphelu-agent-pack");
-  assert.equal(pack.skills.length, 7);
+  assert.equal(pack.skills.length, 8);
   assert.equal(pack.agents.length, 11);
   assert.ok(pack.agents.some((agent) => agent.name === "taphelu-lead"));
   assert.ok(pack.agents.some((agent) => agent.name === "taphelu-qa"));
@@ -562,23 +589,268 @@ test("install write creates local runtime adapters and doctor passes", () => {
   const geminiAgentSkill = readFileSync(join(root, ".gemini", "skills", "taphelu-lead", "SKILL.md"), "utf8");
   const kiroAgent = readFileSync(join(root, ".kiro", "agents", "taphelu-lead.md"), "utf8");
   const claudeMcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
-  const geminiSettings = JSON.parse(readFileSync(join(root, ".gemini", "settings.json"), "utf8"));
+  const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8"));
+  const claudeCommand = readFileSync(join(root, ".claude", "commands", "dl-init.md"), "utf8");
+  const claudeHookPath = join(root, ".claude", "hooks", "taphelu-runtime-hook.mjs");
+  const claudeStatuslinePath = join(root, ".claude", "hooks", "taphelu-statusline.mjs");
+  const codexPointer = readFileSync(join(root, ".codex", "AGENTS.md"), "utf8");
+  const codexRuntimeSettings = JSON.parse(readFileSync(join(root, ".codex", "taphelu-runtime.json"), "utf8"));
+  const geminiSettingsPath = join(root, ".gemini", "settings.json");
+  const geminiSettings = existsSync(geminiSettingsPath)
+    ? JSON.parse(readFileSync(geminiSettingsPath, "utf8"))
+    : {};
+  const geminiRuntimeSettings = JSON.parse(readFileSync(join(root, ".gemini", "extensions", "taphelu", "taphelu-runtime.json"), "utf8"));
+  const geminiExtension = JSON.parse(readFileSync(join(root, ".gemini", "extensions", "taphelu", "gemini-extension.json"), "utf8"));
+  const geminiCommand = readFileSync(join(root, ".gemini", "extensions", "taphelu", "commands", "dl-init.toml"), "utf8");
   const kiroMcp = JSON.parse(readFileSync(join(root, ".kiro", "settings", "mcp.json"), "utf8"));
+  const kiroRuntimeSettings = JSON.parse(readFileSync(join(root, ".kiro", "settings", "taphelu.json"), "utf8"));
+  const kiroCommandSkill = readFileSync(join(root, ".kiro", "skills", "dl-init", "SKILL.md"), "utf8");
   const codexToml = readFileSync(join(root, ".codex", "config.toml"), "utf8");
+  const claudeHookCheck = spawnSync(process.execPath, ["--check", claudeHookPath], { encoding: "utf8" });
+  const claudeStatuslineCheck = spawnSync(process.execPath, ["--check", claudeStatuslinePath], { encoding: "utf8" });
+  const claudeStatuslineRun = spawnSync(process.execPath, [claudeStatuslinePath], { encoding: "utf8", timeout: 1000, stdio: ["ignore", "pipe", "pipe"] });
 
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
   assert.match(codexSkill, /TAPHELU-GENERATED/);
+  assert.match(codexPointer, /Use Taphelu MCP tools/);
   assert.match(claudeAgent, /taphelu-lead/);
   assert.match(claudeAgent, /sub-agent permission/);
+  assert.match(claudeAgent, /skills:\n  - "taphelu-core"/);
+  assert.match(claudeCommand, /# Taphelu Init/);
+  assert.equal(claudeSettings.statusLine.tapheluManaged, "1");
+  assert.equal(claudeSettings.hooks.PreToolUse[0].hooks[0].command, process.execPath);
+  assert.equal(codexRuntimeSettings.taphelu.statusline.mode, "fallback");
+  assert.equal(existsSync(join(root, ".codex", "hooks", "taphelu-statusline.mjs")), false);
   assert.match(geminiAgentSkill, /runtime has no native Taphelu subagent adapter/);
+  assert.equal(geminiExtension.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.equal(geminiSettings.mcpServers?.taphelu, undefined);
+  assert.equal(geminiRuntimeSettings.ui.hideFooter, false);
+  assert.equal(geminiRuntimeSettings.ui.footer.hideModelInfo, false);
+  assert.equal(geminiRuntimeSettings.ui.footer.hideContextPercentage, false);
+  assert.equal(geminiRuntimeSettings.taphelu.statusline.mode, "native-footer");
+  assert.equal(existsSync(join(root, ".gemini", "hooks", "taphelu-statusline.mjs")), false);
+  assert.match(geminiCommand, /prompt =/);
   assert.match(kiroAgent, /taphelu-lead/);
+  assert.equal(kiroRuntimeSettings.taphelu.statusline.mode, "native-tui");
+  assert.equal(existsSync(join(root, ".kiro", "hooks", "taphelu-statusline.mjs")), false);
+  assert.match(kiroCommandSkill, /Invoke with \/dl-init/);
   assert.match(codexToml, /\[mcp_servers\.taphelu\]/);
+  assert.equal(claudeHookCheck.status, 0, claudeHookCheck.stderr);
+  assert.equal(claudeStatuslineCheck.status, 0, claudeStatuslineCheck.stderr);
+  assert.equal(claudeStatuslineRun.status, 0, claudeStatuslineRun.stderr);
   assert.equal(claudeMcp.mcpServers.taphelu.type, "stdio");
   assert.equal(claudeMcp.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
-  assert.equal(geminiSettings.mcpServers.taphelu.args[0], mcpPath);
+  assert.equal(geminiExtension.mcpServers.taphelu.args[0], mcpPath);
   assert.equal(kiroMcp.mcpServers.taphelu.args[0], mcpPath);
   assert.match(doctor.stdout, /`PASS`/);
+});
+
+test("install removes obsolete non-Claude statusline scripts", () => {
+  const root = makeProject();
+  for (const runtime of ["codex", "gemini", "kiro"]) {
+    const stalePath = join(root, `.${runtime}`, "hooks", "taphelu-statusline.mjs");
+    mkdirSync(dirname(stalePath), { recursive: true });
+    writeFileSync(stalePath, "// TAPHELU-GENERATED\n");
+  }
+
+  const install = run(root, ["install", "--runtime", "all", "--scope", "local", "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "local"]);
+
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.equal(existsSync(join(root, ".codex", "hooks", "taphelu-statusline.mjs")), false);
+  assert.equal(existsSync(join(root, ".gemini", "hooks", "taphelu-statusline.mjs")), false);
+  assert.equal(existsSync(join(root, ".kiro", "hooks", "taphelu-statusline.mjs")), false);
+  assert.match(doctor.stdout, /`PASS`/);
+});
+
+test("install core profile filters optional skills and dependent agents", () => {
+  const root = makeProject();
+  const install = run(root, ["install", "--runtime", "claude", "--scope", "local", "--profile", "core", "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "claude", "--scope", "local", "--profile", "core"]);
+
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-core", "SKILL.md")), true);
+  assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-browser", "SKILL.md")), false);
+  assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-adapters", "SKILL.md")), false);
+  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-lead.md")), true);
+  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-visual-qa.md")), false);
+  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-workflow-adapter.md")), false);
+});
+
+test("doctor live validates MCP and runtime status reports adapter health", () => {
+  const root = makeProject();
+  const configDir = join(root, "runtime-home");
+  const install = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--live"]);
+  const status = run(root, ["runtime", "status", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--live"]);
+
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(doctor.stdout, /Live MCP handshake and tools\/list passed/);
+  assert.match(status.stdout, /# Taphelu Runtime Status/);
+  assert.match(status.stdout, /`PASS`/);
+});
+
+test("doctor detects non-absolute MCP commands and local shadowing", () => {
+  const root = makeProject();
+  const configDir = join(root, "runtime-home");
+  const localInstall = run(root, ["install", "--runtime", "claude", "--scope", "local", "--write"]);
+  const globalInstall = run(root, ["install", "--runtime", "codex", "--scope", "global", "--config-dir", configDir, "--write"]);
+  const codexConfig = join(configDir, "config.toml");
+  writeFileSync(codexConfig, readFileSync(codexConfig, "utf8").replace(`command = ${JSON.stringify(process.execPath)}`, `command = "node"`));
+  const codexDoctor = run(root, ["doctor", "--runtime", "codex", "--scope", "global", "--config-dir", configDir]);
+  const claudeDoctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", join(root, "claude-home")]);
+
+  assert.equal(localInstall.status, 0, localInstall.stderr);
+  assert.equal(globalInstall.status, 0, globalInstall.stderr);
+  assert.match(codexDoctor.stdout, /`FAIL`/);
+  assert.match(codexDoctor.stdout, /absolute executable path/);
+  assert.match(claudeDoctor.stdout, /Local claude Taphelu MCP config exists and may shadow global config/);
+});
+
+test("install off removes managed Claude hooks and statusline", () => {
+  const root = makeProject();
+  const configDir = join(root, "claude-home");
+  const first = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--write"]);
+  const second = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--hooks", "off", "--statusline", "off", "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--hooks", "off", "--statusline", "off"]);
+  const settings = readFileSync(join(configDir, "settings.json"), "utf8");
+
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(doctor.stdout, /`PASS`/);
+  assert.doesNotMatch(settings, /taphelu-runtime-hook\.mjs/);
+  assert.doesNotMatch(settings, /taphelu-statusline\.mjs/);
+  assert.match(settings, /"hooks": "off"/);
+  assert.match(settings, /"statusline": "off"/);
+});
+
+test("runtime hook blocks destructive roots but allows ordinary relative cleanup", () => {
+  const root = makeProject();
+  const hookPath = join(repoRoot, "taphelu-pack", "hooks", "taphelu-runtime-hook.mjs");
+  const noInput = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    encoding: "utf8",
+    timeout: 1000,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const blocked = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf /" } }),
+    encoding: "utf8",
+  });
+  const blockedWildcard = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf /*" } }),
+    encoding: "utf8",
+  });
+  const blockedSplitFlags = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -r -f /" } }),
+    encoding: "utf8",
+  });
+  const blockedHomeDot = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf ~/." } }),
+    encoding: "utf8",
+  });
+  const blockedSystemDir = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf /etc" } }),
+    encoding: "utf8",
+  });
+  const blockedGitResetHard = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "git reset HEAD --hard" } }),
+    encoding: "utf8",
+  });
+  const blockedGitDirRemoval = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf .git" } }),
+    encoding: "utf8",
+  });
+  const allowed = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf ./build" } }),
+    encoding: "utf8",
+  });
+  const blockedMemory = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "dl_memory_promote", tool_input: { content: "api_key=abc123" } }),
+    encoding: "utf8",
+  });
+  const allowedMemory = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "dl_memory_promote", tool_input: { content: "stable project decision" } }),
+    encoding: "utf8",
+  });
+  const allowedMemoryArchitecture = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "dl_memory_promote", tool_input: { content: "The system uses token-based auth." } }),
+    encoding: "utf8",
+  });
+  const hookDbPath = join(root, "hook-memory.db");
+  const capturedPrompt = spawnSync(process.execPath, [hookPath, "--policy", "strict"], {
+    input: JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "claude-session-1", cwd: root, prompt: "Use token-based auth, not api_key=abc123." }),
+    encoding: "utf8",
+    env: { ...process.env, TAPHELU_MEMORY_DB: hookDbPath },
+  });
+  const sqliteAvailable = spawnSync("sqlite3", ["--version"], { encoding: "utf8" }).status === 0;
+
+  assert.equal(noInput.error, undefined);
+  assert.equal(noInput.status, 0);
+  assert.equal(blocked.status, 2);
+  assert.equal(blockedWildcard.status, 2);
+  assert.equal(blockedSplitFlags.status, 2);
+  assert.equal(blockedHomeDot.status, 2);
+  assert.equal(blockedSystemDir.status, 2);
+  assert.equal(blockedGitResetHard.status, 2);
+  assert.equal(blockedGitDirRemoval.status, 2);
+  assert.match(blocked.stdout, /permissionDecision/);
+  assert.equal(allowed.status, 0);
+  assert.equal(blockedMemory.status, 2);
+  assert.equal(allowedMemory.status, 0);
+  assert.equal(allowedMemoryArchitecture.status, 0);
+  assert.equal(capturedPrompt.status, 0, capturedPrompt.stderr);
+  if (sqliteAvailable) {
+    const stored = spawnSync("sqlite3", [hookDbPath, "SELECT role||'|'||source||'|'||content FROM l0_records ORDER BY created_at DESC LIMIT 1;"], { encoding: "utf8" });
+    assert.equal(stored.status, 0, stored.stderr);
+    assert.match(stored.stdout, /^user\|user_prompt\|Use token-based auth, not api_key=\[REDACTED\]/);
+  }
+});
+
+test("statusline does not wait forever without piped stdin", () => {
+  const statuslinePath = join(repoRoot, "taphelu-pack", "hooks", "taphelu-statusline.mjs");
+  const result = spawnSync(process.execPath, [statuslinePath], {
+    encoding: "utf8",
+    timeout: 1000,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /\$dl|ctx:0/);
+  assert.match(result.stdout, /model:\?/);
+  assert.match(result.stdout, /ctx:\?/);
+  assert.match(result.stdout, /proj:/);
+  assert.match(result.stdout, /mem:/);
+});
+
+test("statusline surfaces Claude model effort and context percentage from stdin", () => {
+  const root = makeProject();
+  const statuslinePath = join(repoRoot, "taphelu-pack", "hooks", "taphelu-statusline.mjs");
+  const result = spawnSync(process.execPath, [statuslinePath], {
+    input: JSON.stringify({
+      cwd: root,
+      workspace: { current_dir: root, project_dir: root },
+      model: { id: "claude-sonnet-4-5-20250929", display_name: "Claude Sonnet 4.5" },
+      effort: { level: "high" },
+      context_window: { used_percentage: 42.6, remaining_percentage: 57.4, context_window_size: 200000 },
+    }),
+    encoding: "utf8",
+    timeout: 1000,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /model:sonnet-4\.5/);
+  assert.match(result.stdout, /effort:high/);
+  assert.match(result.stdout, /ctx:43%/);
+  assert.match(result.stdout, /phase:Testing/);
 });
 
 test("global install supports runtime config dir and is idempotent", () => {
@@ -610,7 +882,7 @@ test("global install all separates runtimes under shared config dir", () => {
   assert.match(doctor.stdout, /`PASS`/);
   assert.equal(existsSync(join(configDir, "codex", "config.toml")), true);
   assert.equal(existsSync(join(configDir, "claude", ".mcp.json")), true);
-  assert.equal(existsSync(join(configDir, "gemini", "settings.json")), true);
+  assert.equal(existsSync(join(configDir, "gemini", "extensions", "taphelu", "gemini-extension.json")), true);
   assert.equal(existsSync(join(configDir, "kiro", "settings", "mcp.json")), true);
   assert.match(codexSkill, /taphelu_runtime: "codex"/);
   assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
@@ -623,7 +895,7 @@ test("doctor reports stale managed MCP server paths", () => {
   const configPaths = {
     codex: "config.toml",
     claude: ".mcp.json",
-    gemini: "settings.json",
+    gemini: join("extensions", "taphelu", "gemini-extension.json"),
     kiro: join("settings", "mcp.json"),
   };
 
@@ -1382,7 +1654,7 @@ test("verify write records verdict in events, state, and runs", () => {
   assert.equal(events.at(-1).data.verdict, "PASS_WITH_NOTES");
   assert.equal(events.at(-1).data.testing_strictness, "medium");
   assert.deepEqual(events.at(-1).data.testability_review, ["T1: integration"]);
-  assert.match(state, /\$dl verify/);
+  assert.match(state, /dl verify/);
   assert.match(runs, /Close Milestone 10/);
 });
 
@@ -1532,7 +1804,7 @@ test("run write records events and updates resumable files", () => {
   const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
   const runs = readFileSync(join(root, ".projects", "RUNS.md"), "utf8");
   assert.match(state, /Create a resumable run/);
-  assert.match(state, /\$dl run/);
+  assert.match(state, /dl run/);
   assert.match(runs, /Create a resumable run packet/);
   assert.match(runs, /Completed/);
 });
@@ -2215,6 +2487,53 @@ test("import bmad write updates continuation state and memory", () => {
   assert.match(state, /Run `dl plan` against the imported BMAD continuation summary/);
   assert.match(memory, /BMAD import source: _bmad-output/);
   assert.equal(events.at(-1).type, "bmad_imported");
+});
+
+test("import gsd write updates continuation state and memory", () => {
+  const root = makeProject();
+  makeGsdFixture(root);
+  const result = run(root, ["import", "gsd", "--write"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# GSD Import Report/);
+  assert.match(result.stdout, /`continue`/);
+
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.match(state, /Continue GSD-imported plan/);
+  assert.match(state, /imported GSD continuation summary/);
+  assert.match(memory, /GSD import source: .planning/);
+  assert.equal(events.at(-1).type, "gsd_imported");
+});
+
+test("import superpower writes methodology continuation without raw dump", () => {
+  const root = makeProject();
+  makeSuperpowerFixture(root);
+  const result = run(root, ["import", "superpower", "--write"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Superpower Import Report/);
+  assert.match(result.stdout, /karpathy-guidelines\/SKILL.md/);
+
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+  const memory = readFileSync(join(root, ".projects", "MEMORY.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.match(state, /Adapt Superpower-imported methodology/);
+  assert.match(memory, /Superpower import source: superpowers/);
+  assert.match(memory, /Superpower import:/);
+  assert.doesNotMatch(memory, /Verify with examples/);
+  assert.equal(events.at(-1).type, "superpower_imported");
 });
 
 test("imported bmad project can feed status and plan", () => {

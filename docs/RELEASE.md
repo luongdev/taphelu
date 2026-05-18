@@ -71,7 +71,7 @@ npm install -g --prefix "$TMP/prefix" "$PKG"
 DL="$TMP/prefix/bin/dl"
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --dry-run
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --write
-"$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime"
+"$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime" --live
 "$DL" doctor instructions
 ```
 
@@ -110,5 +110,5 @@ DL="$TMP/prefix/bin/dl"
 INSTALLED_ROOT="$(npm root -g --prefix "$TMP/prefix")/@luongdev/taphelu"
 node --check "$INSTALLED_ROOT/bin/taphelu-mcp.mjs"
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --write
-"$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime"
+"$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime" --live
 ```

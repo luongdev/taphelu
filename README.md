@@ -77,10 +77,10 @@ Generate runtime adapters:
 ```bash
 dl install --runtime all --scope local --dry-run
 dl install --runtime all --scope local --write
-dl doctor --runtime all --scope local
+dl doctor --runtime all --scope local --live
 ```
 
-Runtime adapters currently target Codex, Claude, Gemini, and Kiro from the same canonical pack.
+Runtime adapters target Claude, Kiro, Codex, and Gemini from the same canonical pack. `full-auto` install generates MCP config, skills, agents or role fallbacks, slash commands, hooks, and runtime-appropriate status integration. Claude gets native `statusLine`; Gemini keeps native footer model/context visible; Kiro and Codex use `/dl-status` for Taphelu-specific state where custom statusline support is not available.
 
 ## Beta Testing
 
@@ -94,8 +94,8 @@ cd <repo-can-test>
 dl scan --path . --mode quick
 dl scan interview --path .
 dl scan plan --path .
-dl install --runtime codex --scope global --dry-run
-dl doctor --runtime codex --scope global
+dl install --runtime claude --scope global --dry-run
+dl doctor --runtime claude --scope global --live
 ```
 
 ## Local Data Boundaries
@@ -113,11 +113,13 @@ dl doctor --runtime codex --scope global
 - `dl run`: connect requirement, research, planning, and verification.
 - `dl verify`: record verification evidence and review status.
 - `dl scan`: bootstrap context from an existing repo.
+- `dl import bmad|gsd|superpower|project`: import known workflow artifacts or generic repo context.
 - `dl context`: index, search, and fetch project context artifacts.
 - `dl compact`: archive completed milestone, run, and plan context.
 - `dl cleanup context`: legacy/light cleanup for always-loaded files.
 - `dl install`: generate runtime adapters.
-- `dl doctor`: validate generated adapters and instruction hygiene.
+- `dl doctor`: validate generated adapters, live MCP startup, and instruction hygiene.
+- `dl runtime status`: show runtime adapter and MCP health.
 
 ## Documentation
 

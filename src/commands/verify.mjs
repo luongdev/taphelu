@@ -409,7 +409,7 @@ function updateVerificationState(root, verification, now) {
   content = replaceSection(
     content,
     "Current Phase",
-    `\`$dl verify\` completed with verdict \`${verification.verdict}\`.\n\nImplemented commands: ${implementedCommands()}.`
+    `\`dl verify\` completed with verdict \`${verification.verdict}\`.\n\nImplemented commands: ${implementedCommands()}.`
   );
   content = replaceSection(content, "Blockers", verification.blockers.length ? formatList(verification.blockers, "") : "None.");
   content = replaceSection(content, "Next Action", verification.nextAction);
