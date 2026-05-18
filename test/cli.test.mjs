@@ -192,18 +192,23 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`config`/);
 });
 
-test("commands and global runtime commands work without .projects", () => {
+test("commands and runtime install commands work without .projects", () => {
   const root = makePlainRepo();
-  const configDir = join(root, "runtime-home");
+  const globalConfigDir = join(root, "runtime-home");
   const commands = run(root, ["commands"]);
-  const install = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", configDir, "--write"]);
-  const doctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", configDir]);
+  const localInstall = run(root, ["install", "--runtime", "claude", "--scope", "local", "--write"]);
+  const localDoctor = run(root, ["doctor", "--runtime", "claude", "--scope", "local"]);
+  const globalInstall = run(root, ["install", "--runtime", "claude", "--scope", "global", "--config-dir", globalConfigDir, "--write"]);
+  const globalDoctor = run(root, ["doctor", "--runtime", "claude", "--scope", "global", "--config-dir", globalConfigDir]);
 
   assert.equal(commands.status, 0, commands.stderr);
   assert.match(commands.stdout, /# Command Manifest/);
-  assert.equal(install.status, 0, install.stderr);
-  assert.equal(doctor.status, 0, doctor.stderr);
-  assert.match(doctor.stdout, /`PASS`/);
+  assert.equal(localInstall.status, 0, localInstall.stderr);
+  assert.equal(localDoctor.status, 0, localDoctor.stderr);
+  assert.match(localDoctor.stdout, /`PASS`/);
+  assert.equal(globalInstall.status, 0, globalInstall.stderr);
+  assert.equal(globalDoctor.status, 0, globalDoctor.stderr);
+  assert.match(globalDoctor.stdout, /`PASS`/);
 });
 
 test("mcp lists taphelu agent lifecycle tools", async () => {
