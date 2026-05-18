@@ -20,7 +20,8 @@ const APPROVAL_SENSITIVE_TRIGGERS = [
 
 export function runVerify(root, rawArgs) {
   const { options, values } = parseArgs(rawArgs);
-  const fallbackGoal = section(readProjectFile(root, "STATE.md"), "Current Goal");
+  const state = readProjectFile(root, "STATE.md");
+  const fallbackGoal = section(state, "Current Goal");
   const goal = values.join(" ").trim() || fallbackGoal || "Verify current workflow state.";
   const verification = analyzeVerification(goal, {
     requirements: options.requirement ?? [],
@@ -47,6 +48,7 @@ export function runVerify(root, rawArgs) {
     requiredEvidence: options["required-evidence"] ?? [],
     skippedTestRationale: options["skipped-test-rationale"] ?? [],
     nextAction: options["next-action"] ?? "",
+    currentNextAction: section(state, "Next Action"),
     overrideVerdict: options.verdict ? parseVerdict(options.verdict) : "",
   });
 
@@ -196,7 +198,7 @@ export function analyzeVerification(goal, input) {
     verdict = "BLOCKED";
   }
 
-  const nextAction = input.nextAction || defaultNextAction(verdict, blockers, reviewTriggers);
+  const nextAction = input.nextAction || defaultNextAction(verdict, blockers, reviewTriggers, input.currentNextAction);
   const nextRoute = nextRouteForVerdict(verdict);
 
   return {
@@ -447,7 +449,7 @@ function nextRouteForVerdict(verdict) {
   return "blocked";
 }
 
-function defaultNextAction(verdict, blockers, reviewTriggers) {
+function defaultNextAction(verdict, blockers, reviewTriggers, currentNextAction = "") {
   if (verdict === "FAILED") {
     return "Fix failed verification evidence and rerun `dl verify`.";
   }
@@ -456,6 +458,9 @@ function defaultNextAction(verdict, blockers, reviewTriggers) {
   }
   if (reviewTriggers.length) {
     return "Close the run after review evidence is recorded.";
+  }
+  if (currentNextAction.trim()) {
+    return currentNextAction.trim();
   }
   if (verdict === "PASS_WITH_NOTES") {
     return "Record any notes that should influence the next workflow step.";

@@ -586,7 +586,28 @@ function renderGeminiExtensionContext(marker) {
 
 <!-- ${marker}: do not edit. Regenerate with dl install. -->
 
-Use the Taphelu MCP server for lifecycle, memory, scan, context, and closeout. Prefer compact context through \`dl_context\` and \`dl_context_store\`; avoid copying raw logs, browser content, source dumps, PII, or secrets into runtime context.
+Taphelu is the workflow substrate for this project. Use these entrypoints exactly; do not invent host tools.
+
+## Taphelu First
+
+- Start status/context requests with \`/dl-status\` or \`mcp_taphelu_dl_context\`.
+- Start or resume work with \`/dl-init\`, \`/dl-resume\`, or \`mcp_taphelu_dl_start\`.
+- Plan with \`/dl-plan\` after loading compact context.
+- Scan/import with \`/dl-scan\` or \`mcp_taphelu_dl_scan_project\`.
+- Checkpoint with \`mcp_taphelu_dl_checkpoint\`.
+- Close work with \`/dl-close\` or \`mcp_taphelu_dl_close\` after verification evidence exists.
+
+## Tool Rules
+
+- Do not call \`activate_skill\`, \`run_shell_command\`, \`write_file\`, \`list_directory\`, or other guessed tools as Taphelu actions.
+- If a Taphelu tool appears with a different visible namespace, use the visible Taphelu \`dl_*\` tool name.
+- If no Taphelu tool is visible, say the Taphelu tool is unavailable instead of guessing another tool.
+
+## Context Rules
+
+- Prefer compact context through \`mcp_taphelu_dl_context\` and \`mcp_taphelu_dl_context_store\`.
+- Search/get specific artifacts before loading large content.
+- Never copy raw logs, raw browser content, source dumps, PII, or secrets into runtime context.
 `;
 }
 

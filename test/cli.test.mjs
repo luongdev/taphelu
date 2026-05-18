@@ -601,6 +601,7 @@ test("install write creates local runtime adapters and doctor passes", () => {
     : {};
   const geminiRuntimeSettings = JSON.parse(readFileSync(join(root, ".gemini", "extensions", "taphelu", "taphelu-runtime.json"), "utf8"));
   const geminiExtension = JSON.parse(readFileSync(join(root, ".gemini", "extensions", "taphelu", "gemini-extension.json"), "utf8"));
+  const geminiContext = readFileSync(join(root, ".gemini", "extensions", "taphelu", "GEMINI.md"), "utf8");
   const geminiCommand = readFileSync(join(root, ".gemini", "extensions", "taphelu", "commands", "dl-init.toml"), "utf8");
   const kiroMcp = JSON.parse(readFileSync(join(root, ".kiro", "settings", "mcp.json"), "utf8"));
   const kiroRuntimeSettings = JSON.parse(readFileSync(join(root, ".kiro", "settings", "taphelu.json"), "utf8"));
@@ -624,6 +625,9 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.equal(existsSync(join(root, ".codex", "hooks", "taphelu-statusline.mjs")), false);
   assert.match(geminiAgentSkill, /runtime has no native Taphelu subagent adapter/);
   assert.equal(geminiExtension.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.match(geminiContext, /mcp_taphelu_dl_context/);
+  assert.match(geminiContext, /Do not call `activate_skill`/);
+  assert.match(geminiContext, /If no Taphelu tool is visible/);
   assert.equal(geminiSettings.mcpServers?.taphelu, undefined);
   assert.equal(geminiRuntimeSettings.ui.hideFooter, false);
   assert.equal(geminiRuntimeSettings.ui.footer.hideModelInfo, false);
@@ -1656,6 +1660,39 @@ test("verify write records verdict in events, state, and runs", () => {
   assert.deepEqual(events.at(-1).data.testability_review, ["T1: integration"]);
   assert.match(state, /dl verify/);
   assert.match(runs, /Close Milestone 10/);
+});
+
+test("verify write preserves useful next action unless explicitly overridden", () => {
+  const root = makeProject();
+  const preserved = run(root, [
+    "verify",
+    "--write",
+    "--artifact",
+    "STATE.md",
+    "--test",
+    "npm test",
+    "Keep current follow-up.",
+  ]);
+  let state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+
+  assert.equal(preserved.status, 0, preserved.stderr);
+  assert.match(state, /## Next Action\n\nRun CLI tests\./);
+
+  const overridden = run(root, [
+    "verify",
+    "--write",
+    "--artifact",
+    "STATE.md",
+    "--test",
+    "npm test",
+    "--next-action",
+    "Recruit beta testers.",
+    "Override follow-up.",
+  ]);
+  state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+
+  assert.equal(overridden.status, 0, overridden.stderr);
+  assert.match(state, /## Next Action\n\nRecruit beta testers\./);
 });
 
 test("run completes an end-to-end packet from requirement to plan", () => {

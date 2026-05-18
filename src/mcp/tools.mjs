@@ -239,6 +239,7 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
       notes: normalizeArray(args.note),
       evidence: normalizeArray(args.evidence),
       nextAction: args.next_action || "",
+      currentNextAction: section(readProjectFile(root, "STATE.md"), "Next Action"),
       overrideVerdict: args.verdict ? normalizeVerdict(args.verdict) : "",
     });
     if (!["PASS", "PASS_WITH_NOTES"].includes(verification.verdict)) {
