@@ -11,6 +11,7 @@ git status --short
 npm run check
 npm test
 npm run test:cli
+npm run test:runtime-install
 npm pack --dry-run --json
 ```
 

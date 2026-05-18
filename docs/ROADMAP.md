@@ -4,9 +4,9 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, and context store v2 with milestone compaction.
-- Next: runtime install E2E and onboarding hardening.
-- Later: richer graph/index features and publish hardening.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, and runtime install E2E.
+- Next: manual publish approval and publish hardening.
+- Later: richer graph/index features.
 
 ## v0.1 - npm-ready Local CLI/MCP Package
 

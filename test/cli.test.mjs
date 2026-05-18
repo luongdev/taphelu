@@ -509,6 +509,54 @@ test("global install supports runtime config dir and is idempotent", () => {
   }
 });
 
+test("global install all separates runtimes under shared config dir", () => {
+  const root = makeProject();
+  const configDir = join(root, "runtime-home");
+  const install = run(root, ["install", "--runtime", "all", "--scope", "global", "--config-dir", configDir, "--write"]);
+  const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", configDir]);
+  const codexSkill = readFileSync(join(configDir, "codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
+  const geminiSkill = readFileSync(join(configDir, "gemini", "skills", "taphelu-core", "SKILL.md"), "utf8");
+
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(doctor.stdout, /`PASS`/);
+  assert.equal(existsSync(join(configDir, "codex", "config.toml")), true);
+  assert.equal(existsSync(join(configDir, "claude", ".mcp.json")), true);
+  assert.equal(existsSync(join(configDir, "gemini", "settings.json")), true);
+  assert.match(codexSkill, /taphelu_runtime: "codex"/);
+  assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
+});
+
+test("doctor reports stale managed MCP server paths", () => {
+  const root = makeProject();
+  const missingMcp = join(root, "missing", "taphelu-mcp.mjs");
+  const configPaths = {
+    codex: "config.toml",
+    claude: ".mcp.json",
+    gemini: "settings.json",
+  };
+
+  for (const runtime of ["codex", "claude", "gemini"]) {
+    const configDir = join(root, `${runtime}-stale-home`);
+    const install = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
+    const configPath = join(configDir, configPaths[runtime]);
+    writeFileSync(configPath, staleMcpConfig(readFileSync(configPath, "utf8"), runtime, mcpPath, missingMcp));
+    const doctor = run(root, ["doctor", "--runtime", runtime, "--scope", "global", "--config-dir", configDir]);
+
+    assert.equal(install.status, 0, install.stderr);
+    assert.equal(doctor.status, 0, doctor.stderr);
+    assert.match(doctor.stdout, /`FAIL`/);
+    assert.match(doctor.stdout, /MCP server path drift|MCP server path does not exist/);
+  }
+});
+
+function staleMcpConfig(content, runtime, currentMcp, missingMcp) {
+  if (runtime === "codex") return content.replace(JSON.stringify(currentMcp), JSON.stringify(missingMcp));
+  const parsed = JSON.parse(content);
+  parsed.mcpServers.taphelu.args[0] = missingMcp;
+  return `${JSON.stringify(parsed, null, 2)}\n`;
+}
+
 test("install blocks unmanaged adapter files", () => {
   const root = makeProject();
   const target = join(root, ".codex", "skills", "taphelu-core");

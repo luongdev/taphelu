@@ -57,6 +57,21 @@ dl install --runtime all --scope global --config-dir /tmp/taphelu-runtime --writ
 dl doctor --runtime all --scope global --config-dir /tmp/taphelu-runtime
 ```
 
+Generated runtime paths under a custom config dir:
+
+- `--runtime codex`: `/tmp/taphelu-runtime/config.toml` and `/tmp/taphelu-runtime/skills/`
+- `--runtime claude`: `/tmp/taphelu-runtime/.mcp.json`, `/tmp/taphelu-runtime/skills/`, and `/tmp/taphelu-runtime/agents/`
+- `--runtime gemini`: `/tmp/taphelu-runtime/settings.json` and `/tmp/taphelu-runtime/skills/`
+- `--runtime all`: `/tmp/taphelu-runtime/codex`, `/tmp/taphelu-runtime/claude`, and `/tmp/taphelu-runtime/gemini`
+
+`dl doctor` validates managed markers and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs`.
+
+Package runtime E2E:
+
+```bash
+npm run test:runtime-install
+```
+
 Existing unmanaged adapter files block installation. Remove them or migrate them before reinstalling.
 
 Instruction hygiene:

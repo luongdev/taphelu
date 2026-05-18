@@ -51,7 +51,7 @@ export function buildInstallPlan(root, input = {}) {
     const runtimePlan = buildRuntimeInstallPlan(root, pack, {
       runtime,
       scope,
-      configDir: input.configDir,
+      configDir: runtimeConfigDir(input.configDir, runtime, runtimes),
       nodeCommand: input.nodeCommand || process.execPath,
     });
     files.push(...runtimePlan.files);
@@ -108,15 +108,10 @@ export function inspectInstall(root, input = {}) {
         : { path: file.path, status: "FAIL", message: "File exists but lacks Taphelu managed marker." };
     }
     if (file.kind === "mcp-toml") {
-      return content.includes(MANAGED_START) && content.includes("[mcp_servers.taphelu]")
-        ? { path: file.path, status: "PASS", message: "Codex MCP block present." }
-        : { path: file.path, status: "FAIL", message: "Codex MCP block missing." };
+      return inspectCodexMcpFile(file, content);
     }
     if (file.kind === "mcp-json") {
-      const parsed = safeJson(content);
-      return parsed?.mcpServers?.taphelu?.env?.[JSON_MANAGED_ENV] === "1"
-        ? { path: file.path, status: "PASS", message: "MCP server entry present." }
-        : { path: file.path, status: "FAIL", message: "MCP server entry missing or unmanaged." };
+      return inspectJsonMcpFile(file, content);
     }
     return { path: file.path, status: "PASS", message: "Present." };
   });
@@ -172,7 +167,7 @@ function buildRuntimeInstallPlan(root, pack, input) {
     if (merged.blocker) {
       blockers.push(`${configPath}: ${merged.blocker}`);
     } else {
-      files.push({ path: configPath, content: merged.content, kind: "mcp-toml", runtime: input.runtime, marker: MANAGED_START });
+      files.push({ path: configPath, content: merged.content, kind: "mcp-toml", runtime: input.runtime, marker: MANAGED_START, mcp });
     }
   } else {
     const configPath = targetRoot.mcpConfigPath;
@@ -181,7 +176,7 @@ function buildRuntimeInstallPlan(root, pack, input) {
     if (merged.blocker) {
       blockers.push(`${configPath}: ${merged.blocker}`);
     } else {
-      files.push({ path: configPath, content: merged.content, kind: "mcp-json", runtime: input.runtime, marker: JSON_MANAGED_ENV });
+      files.push({ path: configPath, content: merged.content, kind: "mcp-json", runtime: input.runtime, marker: JSON_MANAGED_ENV, mcp });
     }
     if (input.runtime === "claude" && input.scope === "global") {
       manualActions.push(`Claude global MCP can also be installed with: claude mcp add --scope user taphelu -- ${input.nodeCommand} ${MCP_BIN}`);
@@ -354,6 +349,47 @@ function mergeMcpJson(existing, mcp) {
   return { content: `${JSON.stringify(next, null, 2)}\n` };
 }
 
+function inspectCodexMcpFile(file, content) {
+  if (!content.includes(MANAGED_START) || !content.includes("[mcp_servers.taphelu]")) {
+    return { path: file.path, status: "FAIL", message: "Codex MCP block missing." };
+  }
+  const block = managedCodexBlock(content);
+  const command = block.match(/^\s*command\s*=\s*"([^"]+)"/m)?.[1];
+  const argsRaw = block.match(/^\s*args\s*=\s*\[(.*?)\]/m)?.[1] || "";
+  const args = [...argsRaw.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  return inspectMcpCommand(file, command, args);
+}
+
+function inspectJsonMcpFile(file, content) {
+  const parsed = safeJson(content);
+  const entry = parsed?.mcpServers?.taphelu;
+  if (entry?.env?.[JSON_MANAGED_ENV] !== "1") {
+    return { path: file.path, status: "FAIL", message: "MCP server entry missing or unmanaged." };
+  }
+  return inspectMcpCommand(file, entry.command, entry.args);
+}
+
+function inspectMcpCommand(file, command, args = []) {
+  if (command !== file.mcp.command) {
+    return { path: file.path, status: "FAIL", message: `MCP command drift: expected ${file.mcp.command}, found ${command || "missing"}.` };
+  }
+  const [mcpPath] = Array.isArray(args) ? args : [];
+  if (mcpPath !== file.mcp.args[0]) {
+    return { path: file.path, status: "FAIL", message: `MCP server path drift: expected ${file.mcp.args[0]}, found ${mcpPath || "missing"}.` };
+  }
+  if (!existsSync(mcpPath)) {
+    return { path: file.path, status: "FAIL", message: `MCP server path does not exist: ${mcpPath}.` };
+  }
+  return { path: file.path, status: "PASS", message: "Managed MCP server entry points to installed taphelu-mcp." };
+}
+
+function managedCodexBlock(content) {
+  const start = content.indexOf(MANAGED_START);
+  const end = content.indexOf(MANAGED_END);
+  if (start === -1 || end === -1 || end < start) return "";
+  return content.slice(start, end + MANAGED_END.length);
+}
+
 function runtimeTargetRoot(root, runtimeConfig, runtime, scope, configDir) {
   if (scope === "local") {
     const base = join(root, runtimeConfig.configDir);
@@ -378,6 +414,11 @@ function resolveGlobalDir(runtimeConfig, configDir) {
   if (configDir) return resolve(configDir);
   if (runtimeConfig.globalEnv && process.env[runtimeConfig.globalEnv]) return resolve(process.env[runtimeConfig.globalEnv]);
   return join(homedir(), runtimeConfig.defaultGlobalDir);
+}
+
+function runtimeConfigDir(configDir, runtime, runtimes) {
+  if (!configDir || runtimes.length === 1) return configDir;
+  return join(configDir, runtime);
 }
 
 function normalizeRuntime(runtime) {

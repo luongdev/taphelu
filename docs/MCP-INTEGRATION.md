@@ -6,6 +6,8 @@ Taphelu exposes a stdio MCP server:
 node /path/to/taphelu/bin/taphelu-mcp.mjs
 ```
 
+When installed from npm, `dl install` generates MCP entries that point to the installed package's `bin/taphelu-mcp.mjs`. Run `dl doctor --runtime all --scope global --config-dir <tmp-or-runtime-dir>` to verify managed adapter files and stale MCP paths.
+
 Primary tools:
 
 - `dl_start`
