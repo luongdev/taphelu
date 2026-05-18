@@ -13,7 +13,7 @@ Current npm test build:
 - Node.js `>=22.16.0`
 - npm
 - A separate test repository
-- Optional: Codex, Claude, or Gemini runtime config access
+- Optional: Codex, Claude, Gemini, or Kiro runtime config access
 
 Check local versions:
 
@@ -77,6 +77,14 @@ dl install --runtime gemini --scope global --write
 dl doctor --runtime gemini --scope global
 ```
 
+Kiro:
+
+```bash
+dl install --runtime kiro --scope global --dry-run
+dl install --runtime kiro --scope global --write
+dl doctor --runtime kiro --scope global
+```
+
 If install is blocked by unmanaged files, do not overwrite them manually. Save the `dl doctor` output and include it in feedback.
 
 ## Optional Deeper Tests
@@ -106,6 +114,7 @@ Generated runtime adapters live under the runtime config directory:
 - Codex: `~/.codex`
 - Claude: `~/.claude`
 - Gemini: `~/.gemini`
+- Kiro: `~/.kiro`
 
 ## Feedback Template
 
@@ -114,7 +123,7 @@ OS:
 Node version:
 npm version:
 Taphelu version:
-AI runtime tested: Codex / Claude / Gemini / manual CLI
+AI runtime tested: Codex / Claude / Gemini / Kiro / manual CLI
 Repo type: small app / monorepo / microservice / library / unknown
 
 Commands run:

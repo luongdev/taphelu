@@ -52,6 +52,7 @@ Global install:
 dl install --runtime codex --scope global --write
 dl install --runtime claude --scope global --write
 dl install --runtime gemini --scope global --write
+dl install --runtime kiro --scope global --write
 ```
 
 Config roots:
@@ -59,6 +60,26 @@ Config roots:
 - Codex: `CODEX_HOME` or `~/.codex`
 - Claude skills: `CLAUDE_CONFIG_DIR` or `~/.claude`
 - Gemini: `GEMINI_CONFIG_DIR` or `~/.gemini`
+- Kiro: `KIRO_CONFIG_DIR` or `~/.kiro`
+
+Claude Code can also register the MCP server through its own CLI:
+
+```bash
+NODE_BIN="$(command -v node)"
+MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
+claude mcp add -e TAPHELU_MANAGED=1 --transport stdio --scope user taphelu -- "$NODE_BIN" "$MCP_BIN"
+dl doctor --runtime claude --scope global
+```
+
+Restart Claude Code after changing user-scope MCP config if it was already running.
+
+Kiro can also register the MCP server through its CLI:
+
+```bash
+NODE_BIN="$(command -v node)"
+MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
+kiro --add-mcp '{"name":"taphelu","command":"'"$NODE_BIN"'","args":["'"$MCP_BIN"'"],"env":{"TAPHELU_MANAGED":"1"}}'
+```
 
 For tests or custom config roots:
 
@@ -72,7 +93,8 @@ Generated runtime paths under a custom config dir:
 - `--runtime codex`: `/tmp/taphelu-runtime/config.toml` and `/tmp/taphelu-runtime/skills/`
 - `--runtime claude`: `/tmp/taphelu-runtime/.mcp.json`, `/tmp/taphelu-runtime/skills/`, and `/tmp/taphelu-runtime/agents/`
 - `--runtime gemini`: `/tmp/taphelu-runtime/settings.json` and `/tmp/taphelu-runtime/skills/`
-- `--runtime all`: `/tmp/taphelu-runtime/codex`, `/tmp/taphelu-runtime/claude`, and `/tmp/taphelu-runtime/gemini`
+- `--runtime kiro`: `/tmp/taphelu-runtime/settings/mcp.json`, `/tmp/taphelu-runtime/skills/`, and `/tmp/taphelu-runtime/agents/`
+- `--runtime all`: `/tmp/taphelu-runtime/codex`, `/tmp/taphelu-runtime/claude`, `/tmp/taphelu-runtime/gemini`, and `/tmp/taphelu-runtime/kiro`
 
 `dl doctor` validates managed markers and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs`.
 

@@ -63,6 +63,7 @@ Generate runtime adapters:
 dl install --runtime codex --scope local --write
 dl install --runtime claude --scope local --write
 dl install --runtime gemini --scope local --write
+dl install --runtime kiro --scope local --write
 dl install --runtime all --scope local --write
 ```
 
@@ -83,11 +84,17 @@ codex mcp add taphelu -- node /path/to/taphelu/bin/taphelu-mcp.mjs
 Claude:
 
 ```bash
-claude mcp add --transport stdio --scope local taphelu -- node /path/to/taphelu/bin/taphelu-mcp.mjs
+claude mcp add -e TAPHELU_MANAGED=1 --transport stdio --scope local taphelu -- node /path/to/taphelu/bin/taphelu-mcp.mjs
 ```
 
 Gemini:
 
 ```bash
 gemini mcp add taphelu node /path/to/taphelu/bin/taphelu-mcp.mjs
+```
+
+Kiro:
+
+```bash
+kiro --add-mcp '{"name":"taphelu","command":"node","args":["/path/to/taphelu/bin/taphelu-mcp.mjs"],"env":{"TAPHELU_MANAGED":"1"}}'
 ```

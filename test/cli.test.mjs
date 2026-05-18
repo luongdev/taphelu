@@ -125,6 +125,11 @@ function mcpFrame(message) {
   return `Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`;
 }
 
+function mcpLfFrame(message) {
+  const json = JSON.stringify(message);
+  return `Content-Length: ${Buffer.byteLength(json, "utf8")}\n\n${json}`;
+}
+
 function parseMcpFrames(output) {
   const messages = [];
   let cursor = 0;
@@ -361,11 +366,12 @@ test("canonical agent pack validates one source for skills and agents", () => {
   assert.ok(pack.agents.some((agent) => agent.name === "taphelu-qa"));
   assert.ok(pack.agents.some((agent) => agent.name === "taphelu-context-curator"));
   assert.equal(pack.agents.some((agent) => agent.name === "taphelu-orchestrator"), false);
-  assert.equal(plan.runtimes.length, 3);
+  assert.equal(plan.runtimes.length, 4);
   assert.equal(plan.blockers.length, 0);
   assert.ok(plan.files.some((file) => file.path.includes(".codex")));
   assert.ok(plan.files.some((file) => file.path.includes(".claude")));
   assert.ok(plan.files.some((file) => file.path.includes(".gemini")));
+  assert.ok(plan.files.some((file) => file.path.includes(".kiro")));
 });
 
 test("install plan rolls back generated files on write failure", () => {
@@ -410,6 +416,7 @@ test("mcp stdio server handles initialize tools/list and tools/call", () => {
   const responses = parseMcpFrames(result.stdout);
 
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
   assert.equal(responses[0].result.serverInfo.name, "taphelu");
   assert.ok(responses[1].result.tools.some((tool) => tool.name === "dl_start"));
   assert.equal(responses[2].result.structuredContent.session.goal, "Stdio smoke.");
@@ -424,6 +431,21 @@ test("mcp stdio server skips malformed headers and continues buffered messages",
   const result = spawnSync(process.execPath, [mcpPath], {
     cwd: root,
     input,
+    encoding: "utf8",
+  });
+  const responses = parseMcpFrames(result.stdout);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.equal(responses.length, 1);
+  assert.ok(responses[0].result.tools.some((tool) => tool.name === "dl_start"));
+});
+
+test("mcp stdio server accepts LF-only MCP headers", () => {
+  const root = makeProject();
+  const result = spawnSync(process.execPath, [mcpPath], {
+    cwd: root,
+    input: mcpLfFrame({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     encoding: "utf8",
   });
   const responses = parseMcpFrames(result.stdout);
@@ -468,6 +490,7 @@ test("install dry-run plans generated adapters without writing", () => {
   assert.match(result.stdout, /# Taphelu Install Plan/);
   assert.match(result.stdout, /`dry_run`/);
   assert.equal(existsSync(join(root, ".codex")), false);
+  assert.equal(existsSync(join(root, ".kiro")), false);
   assert.equal(existsSync(join(root, ".mcp.json")), false);
 });
 
@@ -478,8 +501,10 @@ test("install write creates local runtime adapters and doctor passes", () => {
   const codexSkill = readFileSync(join(root, ".codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
   const claudeAgent = readFileSync(join(root, ".claude", "agents", "taphelu-lead.md"), "utf8");
   const geminiAgentSkill = readFileSync(join(root, ".gemini", "skills", "taphelu-lead", "SKILL.md"), "utf8");
+  const kiroAgent = readFileSync(join(root, ".kiro", "agents", "taphelu-lead.md"), "utf8");
   const claudeMcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
   const geminiSettings = JSON.parse(readFileSync(join(root, ".gemini", "settings.json"), "utf8"));
+  const kiroMcp = JSON.parse(readFileSync(join(root, ".kiro", "settings", "mcp.json"), "utf8"));
   const codexToml = readFileSync(join(root, ".codex", "config.toml"), "utf8");
 
   assert.equal(install.status, 0, install.stderr);
@@ -488,15 +513,18 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.match(claudeAgent, /taphelu-lead/);
   assert.match(claudeAgent, /sub-agent permission/);
   assert.match(geminiAgentSkill, /runtime has no native Taphelu subagent adapter/);
+  assert.match(kiroAgent, /taphelu-lead/);
   assert.match(codexToml, /\[mcp_servers\.taphelu\]/);
+  assert.equal(claudeMcp.mcpServers.taphelu.type, "stdio");
   assert.equal(claudeMcp.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
   assert.equal(geminiSettings.mcpServers.taphelu.args[0], mcpPath);
+  assert.equal(kiroMcp.mcpServers.taphelu.args[0], mcpPath);
   assert.match(doctor.stdout, /`PASS`/);
 });
 
 test("global install supports runtime config dir and is idempotent", () => {
   const root = makeProject();
-  for (const runtime of ["codex", "claude", "gemini"]) {
+  for (const runtime of ["codex", "claude", "gemini", "kiro"]) {
     const configDir = join(root, `${runtime}-home`);
     const first = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
     const second = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
@@ -516,6 +544,7 @@ test("global install all separates runtimes under shared config dir", () => {
   const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", configDir]);
   const codexSkill = readFileSync(join(configDir, "codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
   const geminiSkill = readFileSync(join(configDir, "gemini", "skills", "taphelu-core", "SKILL.md"), "utf8");
+  const kiroAgent = readFileSync(join(configDir, "kiro", "agents", "taphelu-lead.md"), "utf8");
 
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
@@ -523,8 +552,10 @@ test("global install all separates runtimes under shared config dir", () => {
   assert.equal(existsSync(join(configDir, "codex", "config.toml")), true);
   assert.equal(existsSync(join(configDir, "claude", ".mcp.json")), true);
   assert.equal(existsSync(join(configDir, "gemini", "settings.json")), true);
+  assert.equal(existsSync(join(configDir, "kiro", "settings", "mcp.json")), true);
   assert.match(codexSkill, /taphelu_runtime: "codex"/);
   assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
+  assert.match(kiroAgent, /taphelu_runtime: "kiro"/);
 });
 
 test("doctor reports stale managed MCP server paths", () => {
@@ -534,9 +565,10 @@ test("doctor reports stale managed MCP server paths", () => {
     codex: "config.toml",
     claude: ".mcp.json",
     gemini: "settings.json",
+    kiro: join("settings", "mcp.json"),
   };
 
-  for (const runtime of ["codex", "claude", "gemini"]) {
+  for (const runtime of ["codex", "claude", "gemini", "kiro"]) {
     const configDir = join(root, `${runtime}-stale-home`);
     const install = run(root, ["install", "--runtime", runtime, "--scope", "global", "--config-dir", configDir, "--write"]);
     const configPath = join(configDir, configPaths[runtime]);

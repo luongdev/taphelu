@@ -94,8 +94,8 @@ Usage:
   dl compact milestone --id M23 [--write]
   dl compact runs [--keep n] [--write]
   dl compact plan [--write]
-  dl install --runtime codex|claude|gemini|all --scope local|global [--config-dir path] [--dry-run|--write]
-  dl doctor --runtime codex|claude|gemini|all --scope local|global [--config-dir path]
+  dl install --runtime codex|claude|gemini|kiro|all --scope local|global [--config-dir path] [--dry-run|--write]
+  dl doctor --runtime codex|claude|gemini|kiro|all --scope local|global [--config-dir path]
   dl doctor instructions
   dl config get [key]
   dl config set testing.strictness low|medium|deep

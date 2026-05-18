@@ -6,7 +6,7 @@ It gives AI agents and humans a shared project workflow through:
 
 - `dl`, a local CLI for workflow state, planning, verification, memory, scan, install, and review helpers.
 - `taphelu-mcp`, a stdio MCP server for agent-native lifecycle tools.
-- A canonical agent pack that generates Codex, Claude, and Gemini adapters from one source.
+- A canonical agent pack that generates Codex, Claude, Gemini, and Kiro adapters from one source.
 - Layered local memory using SQLite plus compact `.projects` context files.
 
 ## Status
@@ -79,6 +79,8 @@ dl install --runtime all --scope local --dry-run
 dl install --runtime all --scope local --write
 dl doctor --runtime all --scope local
 ```
+
+Runtime adapters currently target Codex, Claude, Gemini, and Kiro from the same canonical pack.
 
 ## Beta Testing
 

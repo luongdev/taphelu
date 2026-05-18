@@ -55,6 +55,15 @@
       "skillsDir": "skills",
       "nativeAgents": false,
       "mcpConfig": "settings.json"
+    },
+    "kiro": {
+      "configDir": ".kiro",
+      "globalEnv": "KIRO_CONFIG_DIR",
+      "defaultGlobalDir": ".kiro",
+      "skillsDir": "skills",
+      "agentsDir": "agents",
+      "nativeAgents": true,
+      "mcpConfig": "settings/mcp.json"
     }
   }
 }

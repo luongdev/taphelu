@@ -2,6 +2,8 @@
 
 Taphelu uses one canonical pack and generates runtime adapters from it.
 
+Supported adapter targets: Codex, Claude, Gemini, and Kiro.
+
 Canonical source:
 
 - `taphelu-pack/skills/*.md`

@@ -42,6 +42,7 @@ test("package tarball installs runtime adapters and validates MCP from installed
   assert.match(doctor.stdout, /`PASS`/);
   assert.match(readFileSync(join(runtimeHome, "codex", "config.toml"), "utf8"), new RegExp(escapeRegExp("taphelu-mcp.mjs")));
   assert.equal(JSON.parse(readFileSync(join(runtimeHome, "gemini", "settings.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
+  assert.equal(JSON.parse(readFileSync(join(runtimeHome, "kiro", "settings", "mcp.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
 });
 
 function makeWorkspace(root) {
@@ -76,6 +77,7 @@ function assertMcpServerWorks(tapheluMcp, cwd) {
   const result = run(tapheluMcp, [], { cwd, input });
   const messages = parseMcpFrames(result.stdout);
   assert.equal(messages[0].result.serverInfo.name, "taphelu");
+  assert.equal(result.stderr, "");
   assert.ok(messages[1].result.tools.some((tool) => tool.name === "dl_start"));
 }
 

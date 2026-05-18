@@ -98,16 +98,16 @@ class StdioJsonRpcTransport {
 
   async readAvailableMessages() {
     while (true) {
-      const headerEnd = this.buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) return;
-      const header = this.buffer.subarray(0, headerEnd).toString("utf8");
+      const boundary = findHeaderBoundary(this.buffer);
+      if (!boundary) return;
+      const header = this.buffer.subarray(0, boundary.index).toString("utf8");
       const lengthMatch = header.match(/Content-Length:\s*(\d+)/i);
       if (!lengthMatch) {
-        this.buffer = this.buffer.subarray(headerEnd + 4);
+        this.buffer = this.buffer.subarray(boundary.index + boundary.length);
         continue;
       }
       const contentLength = Number.parseInt(lengthMatch[1], 10);
-      const messageStart = headerEnd + 4;
+      const messageStart = boundary.index + boundary.length;
       const messageEnd = messageStart + contentLength;
       if (this.buffer.length < messageEnd) return;
 
@@ -136,4 +136,12 @@ class StdioJsonRpcTransport {
     const json = JSON.stringify(message);
     this.output.write(`Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`);
   }
+}
+
+function findHeaderBoundary(buffer) {
+  const crlf = buffer.indexOf("\r\n\r\n");
+  const lf = buffer.indexOf("\n\n");
+  if (crlf === -1 && lf === -1) return null;
+  if (crlf !== -1 && (lf === -1 || crlf < lf)) return { index: crlf, length: 4 };
+  return { index: lf, length: 2 };
 }

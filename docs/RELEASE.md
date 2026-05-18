@@ -43,7 +43,7 @@ Confirm the dry-run tarball excludes:
 - `.projects/`
 - `.samples/`
 - `test/`
-- local runtime files such as `.codex/`, `.claude/`, `.gemini/`
+- local runtime files such as `.codex/`, `.claude/`, `.gemini/`, `.kiro/`
 - caches, build outputs, and local temp files
 
 ## Temp Install Smoke

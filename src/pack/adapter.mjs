@@ -10,7 +10,7 @@ const MCP_BIN = join(SOURCE_DIR, "bin", "taphelu-mcp.mjs");
 const MANAGED_START = "# TAPHELU MANAGED MCP START";
 const MANAGED_END = "# TAPHELU MANAGED MCP END";
 const JSON_MANAGED_ENV = "TAPHELU_MANAGED";
-const SUPPORTED_RUNTIMES = ["codex", "claude", "gemini"];
+const SUPPORTED_RUNTIMES = ["codex", "claude", "gemini", "kiro"];
 
 export function loadPack() {
   const manifestPath = join(PACK_DIR, "manifest.json");
@@ -159,7 +159,7 @@ function buildRuntimeInstallPlan(root, pack, input) {
     }
   }
 
-  const mcp = buildMcpServerConfig(input.nodeCommand);
+  const mcp = buildMcpServerConfig(input.nodeCommand, input.runtime);
   if (input.runtime === "codex") {
     const configPath = targetRoot.mcpConfigPath;
     const existing = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
@@ -179,7 +179,10 @@ function buildRuntimeInstallPlan(root, pack, input) {
       files.push({ path: configPath, content: merged.content, kind: "mcp-json", runtime: input.runtime, marker: JSON_MANAGED_ENV, mcp });
     }
     if (input.runtime === "claude" && input.scope === "global") {
-      manualActions.push(`Claude global MCP can also be installed with: claude mcp add --scope user taphelu -- ${input.nodeCommand} ${MCP_BIN}`);
+      manualActions.push(`Claude global MCP can also be installed with: claude mcp add -e ${JSON_MANAGED_ENV}=1 --transport stdio --scope user taphelu -- ${input.nodeCommand} ${MCP_BIN}`);
+    }
+    if (input.runtime === "kiro" && input.scope === "global") {
+      manualActions.push(`Kiro global MCP can also be installed with: kiro --add-mcp '${JSON.stringify({ name: "taphelu", command: input.nodeCommand, args: [MCP_BIN], env: { [JSON_MANAGED_ENV]: "1" } })}'`);
     }
   }
 
@@ -247,14 +250,16 @@ This file is generated from the canonical Taphelu pack. Edit the canonical sourc
 `;
 }
 
-function buildMcpServerConfig(nodeCommand) {
-  return {
+function buildMcpServerConfig(nodeCommand, runtime) {
+  const config = {
     command: nodeCommand,
     args: [MCP_BIN],
     env: {
       [JSON_MANAGED_ENV]: "1",
     },
   };
+  if (runtime === "claude") config.type = "stdio";
+  return config;
 }
 
 function snapshotTarget(path) {
@@ -342,6 +347,7 @@ function mergeMcpJson(existing, mcp) {
     return { blocker: "existing taphelu MCP entry is not Taphelu-managed." };
   }
   next.mcpServers.taphelu = {
+    ...(mcp.type ? { type: mcp.type } : {}),
     command: mcp.command,
     args: mcp.args,
     env: mcp.env,

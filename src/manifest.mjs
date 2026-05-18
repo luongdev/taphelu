@@ -16,7 +16,7 @@ export const COMMAND_MANIFEST = [
   { name: "cleanup", usage: "dl cleanup context [--limit n] [--write]", summary: "Preview or write compact project context cleanup." },
   { name: "context", usage: "dl context index|search|get ...", summary: "Index, search, and fetch compact project context artifacts." },
   { name: "compact", usage: "dl compact milestone|runs|plan [--write]", summary: "Compact completed workflow context into indexed artifacts." },
-  { name: "install", usage: "dl install --runtime codex|claude|gemini|all --scope local|global [--write]", summary: "Generate runtime adapters from the canonical Taphelu agent pack." },
-  { name: "doctor", usage: "dl doctor --runtime codex|claude|gemini|all --scope local|global", summary: "Validate generated runtime adapters and MCP configuration." },
+  { name: "install", usage: "dl install --runtime codex|claude|gemini|kiro|all --scope local|global [--write]", summary: "Generate runtime adapters from the canonical Taphelu agent pack." },
+  { name: "doctor", usage: "dl doctor --runtime codex|claude|gemini|kiro|all --scope local|global", summary: "Validate generated runtime adapters and MCP configuration." },
   { name: "config", usage: "dl config get|set [key] [value]", summary: "Read or update project-local Taphelu config." },
 ];
