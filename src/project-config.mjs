@@ -122,7 +122,7 @@ function normalizeProjectConfig(config = {}) {
       },
       compaction: {
         after_close: parseContextAfterClose(config.context?.compaction?.after_close || DEFAULT_PROJECT_CONFIG.context.compaction.after_close),
-        keep_recent_runs: parsePositiveInteger(config.context?.compaction?.keep_recent_runs ?? DEFAULT_PROJECT_CONFIG.context.compaction.keep_recent_runs, "context.compaction.keep_recent_runs"),
+        keep_recent_runs: parseNonNegativeInteger(config.context?.compaction?.keep_recent_runs ?? DEFAULT_PROJECT_CONFIG.context.compaction.keep_recent_runs, "context.compaction.keep_recent_runs"),
         max_always_load_chars: parsePositiveInteger(config.context?.compaction?.max_always_load_chars ?? DEFAULT_PROJECT_CONFIG.context.compaction.max_always_load_chars, "context.compaction.max_always_load_chars"),
       },
     },
@@ -159,7 +159,7 @@ function applyConfigValue(config, key, value) {
     return;
   }
   if (key === "context.compaction.keep_recent_runs") {
-    config.context.compaction.keep_recent_runs = parsePositiveInteger(value, key);
+    config.context.compaction.keep_recent_runs = parseNonNegativeInteger(value, key);
     return;
   }
   if (key === "context.compaction.max_always_load_chars") {
@@ -206,6 +206,13 @@ function normalizeReviewerConfig(runtime, defaults, supplied) {
 function parsePositiveInteger(value, key) {
   if (!/^[1-9]\d*$/.test(String(value))) {
     fail(`Invalid ${key}: ${value}. Expected a positive integer.`);
+  }
+  return Number.parseInt(value, 10);
+}
+
+function parseNonNegativeInteger(value, key) {
+  if (!/^\d+$/.test(String(value))) {
+    fail(`Invalid ${key}: ${value}. Expected a non-negative integer.`);
   }
   return Number.parseInt(value, 10);
 }

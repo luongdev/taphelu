@@ -576,6 +576,7 @@ test("config manages context store and compaction settings", () => {
   const setPath = run(root, ["config", "set", "context.store.path", "../taphelu-context-store"]);
   const setAfterClose = run(root, ["config", "set", "context.compaction.after_close", "auto"]);
   const setKeep = run(root, ["config", "set", "context.compaction.keep_recent_runs", "2"]);
+  const setKeepZero = run(root, ["config", "set", "context.compaction.keep_recent_runs", "0"]);
   const setBudget = run(root, ["config", "set", "context.compaction.max_always_load_chars", "9000"]);
   const config = JSON.parse(readFileSync(join(root, ".projects", "config.json"), "utf8"));
 
@@ -583,11 +584,12 @@ test("config manages context store and compaction settings", () => {
   assert.equal(setPath.status, 0, setPath.stderr);
   assert.equal(setAfterClose.status, 0, setAfterClose.stderr);
   assert.equal(setKeep.status, 0, setKeep.stderr);
+  assert.equal(setKeepZero.status, 0, setKeepZero.stderr);
   assert.equal(setBudget.status, 0, setBudget.stderr);
   assert.equal(config.context.store.kind, "external-dir");
   assert.equal(config.context.store.path, "../taphelu-context-store");
   assert.equal(config.context.compaction.after_close, "auto");
-  assert.equal(config.context.compaction.keep_recent_runs, 2);
+  assert.equal(config.context.compaction.keep_recent_runs, 0);
   assert.equal(config.context.compaction.max_always_load_chars, 9000);
 });
 
@@ -828,6 +830,8 @@ test("context index previews and writes compact artifact index", () => {
   const root = makeProject();
   writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMilestone context store.\n");
   writeFileSync(join(root, ".projects", "RAW.md"), "# Raw\n\napi_key=should-not-index-value\n");
+  mkdirSync(join(root, ".projects", "nested"));
+  writeFileSync(join(root, ".projects", "nested", "config.json"), "{\n  \"title\": \"Nested config artifact\"\n}\n");
   const preview = run(root, ["context", "index"]);
   const previewWroteContext = existsSync(join(root, ".projects", "CONTEXT.md"));
   const write = run(root, ["context", "index", "--write"]);
@@ -845,18 +849,25 @@ test("context index previews and writes compact artifact index", () => {
   assert.equal(write.status, 0, write.stderr);
   assert.match(context, /## Load Policy/);
   assert.match(context, /dl context search/);
+  assert.doesNotMatch(context, /## Current State/);
+  assert.doesNotMatch(context, /Run CLI tests/);
+  assert.match(context, /`roadmap:roadmap-md`: Roadmap/);
   assert.equal(index.schemaVersion, 1);
-  assert.ok(index.artifacts.some((artifact) => artifact.id === "roadmap:roadmap-md"));
+  const roadmap = index.artifacts.find((artifact) => artifact.id === "roadmap:roadmap-md");
+  assert.equal(roadmap.lifecycle, "reference");
+  assert.match(roadmap.fingerprint, /^[a-f0-9]{16}$/);
+  assert.ok(index.artifacts.some((artifact) => artifact.id === "artifact:nested-config-json"));
   assert.doesNotMatch(JSON.stringify(index), /should-not-index-value/);
   assert.equal(events.at(-1).type, "context_indexed");
 });
 
 test("context search and get load only selected artifacts", () => {
   const root = makeProject();
-  writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMilestone context store search target.\n");
+  writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nLine two.\nMilestone context store search target.\nLine four.\n");
   const indexed = run(root, ["context", "index", "--write"]);
   const search = run(root, ["context", "search", "context store"]);
   const get = run(root, ["context", "get", "roadmap:roadmap-md"]);
+  const ranged = run(root, ["context", "get", "roadmap:roadmap-md", "--start-line", "4", "--end-line", "4"]);
 
   assert.equal(indexed.status, 0, indexed.stderr);
   assert.equal(search.status, 0, search.stderr);
@@ -864,6 +875,12 @@ test("context search and get load only selected artifacts", () => {
   assert.equal(get.status, 0, get.stderr);
   assert.match(get.stdout, /# Context Artifact/);
   assert.match(get.stdout, /Milestone context store search target/);
+  assert.equal(ranged.status, 0, ranged.stderr);
+  assert.match(ranged.stdout, /## Lines/);
+  assert.match(ranged.stdout, /4-4/);
+  assert.match(ranged.stdout, /Milestone context store search target/);
+  const rangedContent = ranged.stdout.match(/```markdown\n([\s\S]*?)\n```/)?.[1];
+  assert.equal(rangedContent, "Milestone context store search target.");
 });
 
 test("compact milestone writes summary and refreshes context index", () => {
@@ -887,7 +904,15 @@ test("compact milestone writes summary and refreshes context index", () => {
 
 test("compact runs splits run history into indexed artifacts", () => {
   const root = makeProject();
-  appendFileSync(join(root, ".projects", "RUNS.md"), `| run-old | 2026-01-01 | Old | done |
+  writeFileSync(join(root, ".projects", "RUNS.md"), `# Runs
+
+Manual run preamble.
+
+## Run Index
+
+| Run ID | Date | Goal | Outcome |
+|---|---|---|---|
+| run-old | 2026-01-01 | Old | done |
 | run-new | 2026-01-02 | New | done |
 
 ## run-old
@@ -904,11 +929,29 @@ New detail line.
   const runOld = readFileSync(join(root, ".projects", "runs", "run-old.md"), "utf8");
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(runs, /Manual run preamble/);
   assert.match(runs, /Run details are stored as indexed artifacts/);
   assert.doesNotMatch(runs, /Old detail line/);
   assert.match(runs, /run-new/);
   assert.doesNotMatch(runs, /run-old \| 2026/);
   assert.match(runIndex, /run-old/);
+  assert.match(runOld, /Old detail line/);
+});
+
+test("compact runs can keep zero recent runs while preserving archived artifacts", () => {
+  const root = makeProject();
+  appendFileSync(join(root, ".projects", "RUNS.md"), `| run-old | 2026-01-01 | Old | done |
+
+## run-old
+
+Old detail line.
+`);
+  const result = run(root, ["compact", "runs", "--keep", "0", "--write"]);
+  const runs = readFileSync(join(root, ".projects", "RUNS.md"), "utf8");
+  const runOld = readFileSync(join(root, ".projects", "runs", "run-old.md"), "utf8");
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(runs, /run-old \| 2026/);
   assert.match(runOld, /Old detail line/);
 });
 
@@ -961,12 +1004,14 @@ test("mcp context store indexes, searches, gets, and previews compaction", () =>
   const indexed = callTapheluTool("dl_context_store", { cwd: root, action: "index", write: true });
   const searched = callTapheluTool("dl_context_store", { cwd: root, action: "search", query: "MCP context" });
   const got = callTapheluTool("dl_context_store", { cwd: root, action: "get", id: "roadmap:roadmap-md" });
+  const ranged = callTapheluTool("dl_context_store", { cwd: root, action: "get", id: "roadmap:roadmap-md", start_line: 3, end_line: 3 });
   const compact = callTapheluTool("dl_context_store", { cwd: root, action: "compact", kind: "milestone", id: "M24" });
   const context = callTapheluTool("dl_context", { cwd: root });
 
   assert.equal(indexed.wrote, true);
   assert.ok(searched.report.results.some((artifact) => artifact.id === "roadmap:roadmap-md"));
   assert.match(got.report.content, /MCP context store artifact/);
+  assert.equal(ranged.report.lineRange.start, 3);
   assert.equal(compact.wrote, false);
   assert.ok(context.contextArtifacts.some((artifact) => artifact.id === "roadmap:roadmap-md"));
   assert.doesNotMatch(JSON.stringify(context), /## run-/);

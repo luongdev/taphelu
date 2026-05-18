@@ -18,6 +18,24 @@ export function parseArgs(args) {
       options.full = true;
       continue;
     }
+    if (arg.startsWith("--start-line=")) {
+      options["start-line"] = arg.slice("--start-line=".length);
+      continue;
+    }
+    if (arg === "--start-line") {
+      options["start-line"] = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--end-line=")) {
+      options["end-line"] = arg.slice("--end-line=".length);
+      continue;
+    }
+    if (arg === "--end-line") {
+      options["end-line"] = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
     if (arg === "--global") {
       options.scope = "global";
       continue;

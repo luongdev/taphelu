@@ -1,6 +1,6 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { parseLimit } from "./args.mjs";
 import { EVENT_TYPES } from "./constants.mjs";
 import { appendEvent, timestampForId } from "./events.mjs";
 import { fail } from "./errors.mjs";
@@ -10,7 +10,7 @@ import { escapeTable, formatList, replaceSection, section, unsafeMemory } from "
 
 const CONTEXT_INDEX_FILE = "index.json";
 const CONTEXT_ENTRY_FILE = "CONTEXT.md";
-const PROJECT_SKIP = new Set(["config.json", "events.jsonl", CONTEXT_INDEX_FILE, CONTEXT_ENTRY_FILE]);
+const PROJECT_ROOT_SKIP = new Set(["config.json", "events.jsonl", CONTEXT_INDEX_FILE, CONTEXT_ENTRY_FILE]);
 const TEXT_EXTENSIONS = new Set([".md", ".mmd", ".json", ".yaml", ".yml", ".txt"]);
 const MAX_INDEX_SUMMARY_CHARS = 220;
 const DEFAULT_GET_CHARS = 4000;
@@ -69,23 +69,15 @@ export function buildContextIndex(root, config = readProjectConfig(root), store 
 }
 
 export function buildContextDocument(root, index, config = readProjectConfig(root), store = resolveContextStore(root, config)) {
-  const state = readProjectFile(root, "STATE.md");
   const recentArtifacts = index.artifacts
     .filter((artifact) => !["state", "memory"].includes(artifact.type))
     .slice(0, 12);
   const body = `# Taphelu Context
 
-## Current State
-
-- Goal: ${singleLine(section(state, "Current Goal") || "None.")}
-- Milestone: ${singleLine(section(state, "Current Milestone") || "None.")}
-- Phase: ${singleLine(section(state, "Current Phase") || "None.")}
-- Next action: ${singleLine(section(state, "Next Action") || "None.")}
-- Blockers: ${singleLine(section(state, "Blockers") || "None.")}
-
 ## Load Policy
 
 - Default agent context loads this file plus STATE.md and MEMORY.md only.
+- Runtime state source of truth is STATE.md or the structured fields returned by \`dl_context\`; this file intentionally does not mirror state.
 - Use \`dl context search <query>\` before reading large artifacts.
 - Use \`dl context get <id>\` for targeted artifact loading.
 - Use \`dl compact milestone --id <id> --write\` after verified closeout.
@@ -100,7 +92,7 @@ export function buildContextDocument(root, index, config = readProjectConfig(roo
 
 ## Indexed Artifacts
 
-${recentArtifacts.length ? recentArtifacts.map((artifact) => `- \`${artifact.id}\` (${artifact.type}) ${artifact.title} -> \`${artifact.path}\``).join("\n") : "- None yet."}
+${recentArtifacts.length ? recentArtifacts.map((artifact) => `- \`${artifact.id}\`: ${artifact.title}`).join("\n") : "- None yet."}
 `;
   return clampContext(body, config.context.compaction.max_always_load_chars);
 }
@@ -133,13 +125,15 @@ export function getContextArtifact(root, id, input = {}) {
   const path = resolveArtifactPath(root, artifact.path);
   if (!existsSync(path)) fail(`Context artifact is missing: ${artifact.path}`);
   const raw = readFileSync(path, "utf8");
+  const selected = selectLineRange(raw, input);
   const maxChars = input.full ? Number.POSITIVE_INFINITY : input.maxChars || DEFAULT_GET_CHARS;
-  const content = safeContentPreview(raw, maxChars);
+  const content = safeContentPreview(selected.content, maxChars);
   return {
     kind: "context_artifact",
     artifact,
+    lineRange: selected.lineRange,
     content,
-    truncated: content.length < raw.length,
+    truncated: Boolean(selected.lineRange) || content.length < raw.length,
     nextRoute: "continue",
   };
 }
@@ -188,7 +182,7 @@ export function analyzeRunsCompaction(root, input = {}) {
   const config = readProjectConfig(root);
   const store = resolveContextStore(root, config);
   validateStore(root, store);
-  const keep = parseLimit(input.keep || config.context.compaction.keep_recent_runs);
+  const keep = parseKeepRuns(input.keep ?? config.context.compaction.keep_recent_runs);
   const runs = readProjectFile(root, "RUNS.md");
   const split = splitRuns(runs, keep, root, store);
   return {
@@ -345,6 +339,8 @@ ${formatArtifactRows(report.results)}
 }
 
 export function buildContextArtifactReport(report) {
+  const lineSection = report.lineRange ? `## Lines\n\n${report.lineRange.start}-${report.lineRange.end}\n\n` : "";
+  const truncated = report.truncated ? "Content was truncated or line-limited.\n\n" : "";
   return `# Context Artifact
 
 ## Artifact
@@ -360,7 +356,7 @@ export function buildContextArtifactReport(report) {
 ${report.content.trimEnd()}
 \`\`\`
 
-## Next Route
+${lineSection}${truncated}## Next Route
 
 \`${report.nextRoute}\`
 `;
@@ -457,9 +453,9 @@ function walk(dir, files) {
 
 function shouldIndexFile(root, path, base) {
   const name = basename(path);
-  if (PROJECT_SKIP.has(name)) return false;
   if (!TEXT_EXTENSIONS.has(extension(name))) return false;
   const rel = relative(base, path).replaceAll("\\", "/");
+  if (PROJECT_ROOT_SKIP.has(rel)) return false;
   if (rel.startsWith("memory/")) return false;
   if (rel.startsWith("graphs/") && name.endsWith(".json")) return true;
   return true;
@@ -480,6 +476,8 @@ function artifactFromFile(root, absolutePath, display) {
     tags: artifactTags(type, display),
     path: display,
     updatedAt: stat.mtime.toISOString(),
+    lifecycle: artifactLifecycle(display),
+    fingerprint: contentFingerprint(content),
     size: {
       lines: content.trim() ? content.trimEnd().split(/\r?\n/).length : 0,
       chars: content.length,
@@ -599,12 +597,13 @@ function splitRuns(markdown, keep, root, store) {
   const detailStart = markdown.search(/^## run-/m);
   const indexPart = detailStart === -1 ? markdown : markdown.slice(0, detailStart);
   const detailPart = detailStart === -1 ? "" : markdown.slice(detailStart);
+  const preamble = runPreamble(indexPart);
   const details = detailPart
     .split(/\n(?=## run-)/)
     .map((item) => item.trim())
     .filter(Boolean);
   const rows = indexPart.split(/\r?\n/).filter((line) => line.startsWith("| run-"));
-  const keepIds = new Set(rows.slice(-keep).map((line) => line.split("|")[1]?.trim()).filter(Boolean));
+  const keepIds = new Set((keep === 0 ? [] : rows.slice(-keep)).map((line) => line.split("|")[1]?.trim()).filter(Boolean));
   const recentRows = rows.filter((line) => keepIds.has(line.split("|")[1]?.trim()));
   const indexContent = `# Run Artifact Index
 
@@ -621,6 +620,8 @@ ${rows.join("\n")}
     };
   });
   const nextRuns = `# Runs
+
+${preamble ? `${preamble}\n\n` : ""}## Run Storage
 
 Run details are stored as indexed artifacts. Use \`dl context search run\` or \`dl context get run:<run-id>\`.
 
@@ -683,6 +684,54 @@ function safeContentPreview(content, maxChars) {
   const safe = lines.join("\n");
   if (maxChars === Number.POSITIVE_INFINITY || safe.length <= maxChars) return safe;
   return `${safe.slice(0, maxChars).trimEnd()}\n\n[truncated]\n`;
+}
+
+function selectLineRange(content, input = {}) {
+  const start = parseOptionalLine(input.startLine ?? input.start_line, "start-line");
+  const end = parseOptionalLine(input.endLine ?? input.end_line, "end-line");
+  if (start === undefined && end === undefined) return { content, lineRange: null };
+  const lines = String(content || "").split(/\r?\n/);
+  const normalizedStart = start ?? 1;
+  const normalizedEnd = end ?? lines.length;
+  if (normalizedEnd < normalizedStart) fail("Invalid line range: end-line must be greater than or equal to start-line.");
+  return {
+    content: lines.slice(normalizedStart - 1, normalizedEnd).join("\n"),
+    lineRange: {
+      start: normalizedStart,
+      end: Math.min(normalizedEnd, lines.length),
+    },
+  };
+}
+
+function parseOptionalLine(value, label) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (!/^[1-9]\d*$/.test(String(value))) fail(`Invalid ${label}: ${value}. Expected a positive integer.`);
+  return Number.parseInt(value, 10);
+}
+
+function parseKeepRuns(value) {
+  if (!/^\d+$/.test(String(value))) fail(`Invalid keep: ${value}. Expected a non-negative integer.`);
+  return Number.parseInt(value, 10);
+}
+
+function runPreamble(indexPart) {
+  const lines = String(indexPart || "").split(/\r?\n/);
+  const start = lines[0]?.trim() === "# Runs" ? 1 : 0;
+  const runIndex = lines.findIndex((line) => /^##\s+Run Index\s*$/i.test(line.trim()));
+  const end = runIndex === -1 ? lines.length : runIndex;
+  return lines.slice(start, end).join("\n").trim();
+}
+
+function artifactLifecycle(display) {
+  const path = display.replaceAll("\\", "/");
+  if (path.includes("/active/")) return "active";
+  if (path.includes("/archive/") || path.includes("/milestones/") || path.includes("/runs/")) return "historical";
+  if (/ROADMAP|MILESTONE-PLANS/.test(path)) return "reference";
+  return "current";
+}
+
+function contentFingerprint(content) {
+  return createHash("sha256").update(String(content || "")).digest("hex").slice(0, 16);
 }
 
 function formatSafeBullets(markdown, limit) {

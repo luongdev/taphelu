@@ -47,6 +47,7 @@ dl config set context.store.kind external-dir
 dl config set context.store.path ../taphelu-context
 dl config set context.compaction.after_close suggest
 dl config set context.compaction.keep_recent_runs 5
+dl config set context.compaction.keep_recent_runs 0
 ```
 
 Testing strictness:

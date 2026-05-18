@@ -90,7 +90,7 @@ Usage:
   dl cleanup context [--limit n] [--dry-run|--write]
   dl context index [--write]
   dl context search <query>
-  dl context get <id> [--full]
+  dl context get <id> [--full] [--start-line n] [--end-line n]
   dl compact milestone --id M23 [--write]
   dl compact runs [--keep n] [--write]
   dl compact plan [--write]

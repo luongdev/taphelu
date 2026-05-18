@@ -41,7 +41,7 @@ Use these fields to carry the QA testability gate into closeout.
 
 - `index`: preview or write `.projects/CONTEXT.md` and `.projects/index.json`.
 - `search`: search indexed artifacts by title, summary, tags, and path.
-- `get`: fetch one selected artifact by id.
+- `get`: fetch one selected artifact by id; use `start_line` and `end_line` for targeted reads.
 - `compact`: preview or write milestone, runs, or plan compaction.
 
 `dl_scan_project` maps an existing repo into compact project context. It reports structure, stack signals, service/API signals, docs, entrypoints, and inferred test commands without storing raw source dumps. It respects `.gitignore` and `.agentignore`.

@@ -42,6 +42,8 @@ export const TAPHELU_MCP_TOOLS = [
     keep: numberSchema("Number of recent runs to keep for compact kind=runs."),
     write: booleanSchema("Whether to write changes. Defaults to false preview."),
     full: booleanSchema("For action=get, return full artifact content instead of a compact preview."),
+    start_line: numberSchema("For action=get, first 1-based line to return."),
+    end_line: numberSchema("For action=get, last 1-based line to return."),
   }),
   tool("dl_observe", "Record an agent/user/tool observation into L0 memory.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -309,7 +311,11 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
       return { action, report, nextRoute: report.nextRoute };
     }
     if (action === "get") {
-      const report = getContextArtifact(root, args.id || "", { full: Boolean(args.full) });
+      const report = getContextArtifact(root, args.id || "", {
+        full: Boolean(args.full),
+        start_line: args.start_line,
+        end_line: args.end_line,
+      });
       return { action, report, nextRoute: report.nextRoute };
     }
     if (action === "compact") {

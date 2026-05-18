@@ -36,7 +36,11 @@ function runContextSearch(root, rawArgs) {
 
 function runContextGet(root, rawArgs) {
   const { options, values } = parseArgs(rawArgs);
-  if (values.length !== 1) fail("Usage: dl context get <id> [--full]");
-  const report = getContextArtifact(root, values[0], { full: Boolean(options.full) });
+  if (values.length !== 1) fail("Usage: dl context get <id> [--full] [--start-line n] [--end-line n]");
+  const report = getContextArtifact(root, values[0], {
+    full: Boolean(options.full),
+    startLine: options["start-line"],
+    endLine: options["end-line"],
+  });
   console.log(buildContextArtifactReport(report));
 }
