@@ -1,5 +1,27 @@
 # Install
 
+Install the published package:
+
+```bash
+npm install -g @luongdev/taphelu
+```
+
+Before publish, install from a local tarball:
+
+```bash
+npm pack
+npm install -g ./luongdev-taphelu-*.tgz
+```
+
+Validate the binaries:
+
+```bash
+dl commands
+taphelu-mcp
+```
+
+`taphelu-mcp` is a stdio server. It waits silently for JSON-RPC input when run directly; press `Ctrl+C` to exit.
+
 Taphelu install is generated from `taphelu-pack`.
 
 Dry run first:
@@ -53,3 +75,7 @@ dl config set testing.strictness medium
 ```
 
 The default is `medium`. `dl plan`, `dl run`, and `dl verify` use this value when deciding evidence depth.
+
+Release checklist:
+
+- See [Release Checklist](RELEASE.md).
