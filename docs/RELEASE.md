@@ -14,7 +14,7 @@ npm run release:check
 
 `release:check` does not publish. It verifies the working tree is clean, the exact `package.json` version is not already published, npm auth is available, baseline tests pass, runtime install E2E passes, and the dry-run tarball has the expected contents.
 
-For test publishes before a stable release, use prerelease build versions such as `0.1.0-build.1`, `0.1.0-build.2`, and `0.1.0-build.3`.
+For test publishes before a stable release, use prerelease build versions such as `0.1.0-build.1`, `0.1.0-build.2`, and `0.1.0-build.3`. Reserve stable `0.1.0` for the first build that has passed beta feedback.
 
 The expanded command sequence is:
 

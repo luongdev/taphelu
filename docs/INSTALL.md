@@ -6,6 +6,12 @@ Install the published package:
 npm install -g @luongdev/taphelu
 ```
 
+Current npm test build:
+
+```bash
+0.1.0-build.1
+```
+
 Before publish, install from a local tarball:
 
 ```bash
@@ -21,6 +27,10 @@ taphelu-mcp
 ```
 
 `taphelu-mcp` is a stdio server. It waits silently for JSON-RPC input when run directly; press `Ctrl+C` to exit.
+
+Beta testing:
+
+- See [Beta Test Guide](BETA-TEST.md) for the recommended real-project smoke path and feedback template.
 
 Taphelu install is generated from `taphelu-pack`.
 

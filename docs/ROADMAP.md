@@ -4,8 +4,8 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, and pre-publish release guard.
-- Next: v0.1 npm release execution after manual approval.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Codex/Claude/Gemini adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, and npm test build `0.1.0-build.1`.
+- Next: beta onboarding kit and structured feedback loop.
 - Later: richer graph/index features.
 
 ## v0.1 - npm-ready Local CLI/MCP Package
@@ -19,12 +19,29 @@ Includes:
 - Pack whitelist that includes `bin`, `src`, `scripts`, `taphelu-pack`, and `docs`.
 - README, LICENSE, install docs, and publish checklist.
 - Smoke tests for `npm pack`, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
+- Published npm test build: `@luongdev/taphelu@0.1.0-build.1`.
 
 Done when:
 
 - A user can install from a packed tarball and run the CLI/MCP entrypoints.
 - The npm tarball excludes `.projects`, `.samples`, tests, caches, and local runtime files.
 - Publish remains an explicit manual step guarded by `npm run release:check`.
+
+## v0.1 Beta - Onboarding and Feedback
+
+Goal: help beta testers try Taphelu on real repositories and report actionable feedback.
+
+Includes:
+
+- `docs/BETA-TEST.md` with install, scan, runtime adapter, cleanup, and feedback steps.
+- Codex-first runtime adapter smoke path, with Claude and Gemini variants.
+- Feedback template covering environment, repo type, commands, expected/actual result, and `dl doctor` status.
+
+Done when:
+
+- A tester can run a first Taphelu session without reading the full docs.
+- Feedback includes enough data to reproduce install, scan, or runtime adapter failures.
+- Next implementation work is chosen from real beta friction.
 
 ## v0.2 - Deep Project Import and Scan Planning
 
