@@ -7,8 +7,9 @@ Show compact runtime status.
 3. Use `dl doctor --runtime <runtime> --live` for runtime integration health.
 4. Report current goal, phase, verification gate, review gate, and context load policy.
 
-Runtime-specific note:
+Runtime entrypoint note:
 
-- Gemini: `/dl-status` should call `mcp_taphelu_dl_context` or the visible Taphelu `dl_context` MCP tool. Do not try `run_shell_command`, `activate_skill`, or `write_file` for status.
+- `/dl-status` should call the visible Taphelu context tool: `dl_context`, `taphelu:dl_context`, or Gemini-style `mcp_taphelu_dl_context`.
+- Do not try guessed host tools such as `run_shell_command`, `activate_skill`, `write_file`, or runtime-specific equivalents for status.
 
 Keep status short.

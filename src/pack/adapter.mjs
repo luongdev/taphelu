@@ -535,6 +535,8 @@ function renderCodexInstructionPointer(marker) {
 
 Use Taphelu MCP tools and generated skills for lifecycle work. Start non-trivial work with \`dl_start\` or \`/dl-init\`, use \`dl_context\` before planning, checkpoint with \`dl_checkpoint\`, and close with \`dl_close\` after verification.
 
+Use only visible Taphelu entrypoints: \`/dl-*\`, \`dl_*\`, or host-qualified \`taphelu:dl_*\`. Do not invent host tools as Taphelu entrypoints.
+
 Keep this file compact. Do not paste raw logs, browser content, source dumps, PII, secrets, or roadmap history here.
 ${INSTRUCTION_BLOCK_END}
 `;

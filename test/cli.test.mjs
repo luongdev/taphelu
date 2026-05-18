@@ -614,7 +614,10 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
   assert.match(codexSkill, /TAPHELU-GENERATED/);
+  assert.match(codexSkill, /Across Codex, Claude, Gemini, Kiro/);
+  assert.match(codexSkill, /Do not invent host tools/);
   assert.match(codexPointer, /Use Taphelu MCP tools/);
+  assert.match(codexPointer, /Use only visible Taphelu entrypoints/);
   assert.match(claudeAgent, /taphelu-lead/);
   assert.match(claudeAgent, /sub-agent permission/);
   assert.match(claudeAgent, /skills:\n  - "taphelu-core"/);

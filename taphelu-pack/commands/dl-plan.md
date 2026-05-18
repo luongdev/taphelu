@@ -10,6 +10,7 @@ Create implementation-ready task contracts.
 
 Planner writes contracts, not duplicated implementation.
 
-Runtime-specific note:
+Runtime entrypoint note:
 
-- Gemini: `/dl-plan` should use `mcp_taphelu_dl_context` first, then produce the plan. Do not use nonexistent shell/file/skill tools as a substitute for Taphelu context.
+- `/dl-plan` should load compact context first with the visible Taphelu context tool: `dl_context`, `taphelu:dl_context`, or Gemini-style `mcp_taphelu_dl_context`.
+- Do not use nonexistent shell/file/skill tools as a substitute for Taphelu context.
