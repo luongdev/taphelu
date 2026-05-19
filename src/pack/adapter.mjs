@@ -138,7 +138,7 @@ export function inspectInstall(root, input = {}) {
     ...plan.files.map((file) => {
     if (file.remove) {
       return existsSync(file.path)
-        ? { path: file.path, status: "WARN", message: "Obsolete managed statusline script remains; run dl install --write to remove it." }
+        ? { path: file.path, status: "WARN", message: "Obsolete managed file remains; run dl install --write to remove it." }
         : { path: file.path, status: "PASS", message: "Obsolete managed file already removed." };
     }
     if (!existsSync(file.path)) {
@@ -340,6 +340,8 @@ function buildRuntimeInstallPlan(root, pack, input) {
     }
     if (input.runtime === "kiro" && input.scope === "global") {
       manualActions.push(`Kiro global MCP can also be installed with: kiro-cli mcp add --scope global --name taphelu --command ${shellQuote(input.nodeCommand)} --args ${shellQuote(MCP_BIN)} --env ${JSON_MANAGED_ENV}=1 --force`);
+      manualActions.push("Kiro IDE Agent Hooks are workspace-local. To show hooks in the Kiro panel for this repo, run: dl install --runtime kiro --scope local --profile full-auto --hooks strict --statusline on --write");
+      warnings.push("Kiro IDE Agent Hooks are discovered from the workspace .kiro/hooks directory. Global install configures Kiro CLI agents/hooks, MCP, skills, and steering, but it cannot make IDE hooks appear in every workspace.");
     }
   }
 
@@ -376,7 +378,7 @@ function buildRuntimeInstallPlan(root, pack, input) {
         kind: "hook",
         runtime: input.runtime,
       });
-      if (input.runtime === "kiro") {
+      if (input.runtime === "kiro" && input.scope === "local") {
         for (const hookFile of renderKiroIdeHooks({
           marker: pack.manifest.managedMarker,
           nodeCommand: input.nodeCommand,
@@ -388,6 +390,15 @@ function buildRuntimeInstallPlan(root, pack, input) {
             content: hookFile.content,
             marker: pack.manifest.managedMarker,
             kind: "kiro-ide-hook",
+            runtime: input.runtime,
+          });
+        }
+      } else if (input.runtime === "kiro" && input.scope === "global") {
+        for (const name of kiroIdeHookNames()) {
+          addManagedRemoval(files, blockers, {
+            path: join(targetRoot.hooksRoot, name),
+            marker: pack.manifest.managedMarker,
+            kind: "remove",
             runtime: input.runtime,
           });
         }

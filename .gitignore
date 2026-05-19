@@ -3,5 +3,12 @@
 .codex/
 .claude
 .gemini/
+.kiro/agents/taphelu-*.json
+.kiro/hooks/taphelu-*
+.kiro/settings/mcp.json
+.kiro/settings/taphelu.json
+.kiro/skills/dl-*/
+.kiro/skills/taphelu-*/
+.kiro/steering/taphelu-runtime.md
 .mcp.json
 CLAUDE.md

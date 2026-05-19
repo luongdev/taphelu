@@ -57,6 +57,12 @@ dl install --runtime codex --scope global --write
 dl install --runtime gemini --scope global --write
 ```
 
+Kiro IDE Agent Hooks are workspace-local. A global Kiro install configures `kiro-cli` agents/hooks, MCP, skills, and steering, but the Kiro panel only discovers hook files in the current repo's `.kiro/hooks` directory. To make Taphelu hooks visible in a Kiro IDE workspace, run this from that repo:
+
+```bash
+dl install --runtime kiro --scope local --profile full-auto --hooks strict --statusline on --write
+```
+
 Config roots:
 
 - Codex: `CODEX_HOME` or `~/.codex`
@@ -97,7 +103,7 @@ Generated runtime paths under a custom config dir:
 - `--runtime codex`: `config.toml`, `skills/`, `commands/`, `AGENTS.md`, and `/dl-status` fallback metadata.
 - `--runtime claude`: `.mcp.json`, `skills/`, `agents/`, `commands/`, `hooks/`, and `settings.json` with hooks/statusLine.
 - `--runtime gemini`: `settings.json`, `skills/`, and `extensions/taphelu/` with `gemini-extension.json`, commands, context, and footer settings for model/context display.
-- `--runtime kiro`: `settings/mcp.json`, `skills/`, specialist CLI `agents/*.json` with hooks, IDE `.kiro.hook` files, native-TUI status metadata, Kiro steering, and skill-based `/dl-*` commands. `taphelu-lead` is installed as main-session skill/steering, not as a spawned agent.
+- `--runtime kiro`: `settings/mcp.json`, `skills/`, specialist CLI `agents/*.json` with hooks, native-TUI status metadata, Kiro steering, and skill-based `/dl-*` commands. Local-scope install also writes IDE `.kiro.hook` files under the workspace `.kiro/hooks`. `taphelu-lead` is installed as main-session skill/steering, not as a spawned agent.
 - `--runtime all`: `/tmp/taphelu-runtime/claude`, `/tmp/taphelu-runtime/kiro`, `/tmp/taphelu-runtime/codex`, and `/tmp/taphelu-runtime/gemini`
 
 `dl doctor` validates managed markers, hooks/status files or fallback metadata, local/global shadowing, and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs` or uses non-absolute `node`.

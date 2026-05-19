@@ -903,6 +903,7 @@ test("global install all separates runtimes under shared config dir", () => {
 
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(install.stdout, /Kiro IDE Agent Hooks are workspace-local/);
   assert.match(doctor.stdout, /`PASS`/);
   assert.equal(existsSync(join(configDir, "codex", "config.toml")), true);
   assert.equal(existsSync(join(configDir, "claude", ".mcp.json")), true);
@@ -911,6 +912,7 @@ test("global install all separates runtimes under shared config dir", () => {
   assert.match(codexSkill, /taphelu_runtime: "codex"/);
   assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
   assert.equal(existsSync(join(configDir, "kiro", "agents", "taphelu-lead.json")), false);
+  assert.equal(existsSync(join(configDir, "kiro", "hooks", "taphelu-prompt-context.kiro.hook")), false);
   assert.match(kiroLeadSkill, /main-session taphelu-lead role contract/);
   assert.match(kiroAgent.prompt, /TAPHELU-GENERATED/);
   assert.equal(kiroAgent.includeMcpJson, true);

@@ -80,7 +80,7 @@ dl install --runtime all --scope local --write
 dl doctor --runtime all --scope local --live
 ```
 
-Runtime adapters target Claude, Kiro, Codex, and Gemini from the same canonical pack. `full-auto` install generates MCP config, skills, specialist agents or role fallbacks, slash commands, hooks, and runtime-appropriate status integration. `taphelu-lead` stays in the main session, while specialist roles are delegated. Claude gets native `statusLine`; Gemini keeps native footer model/context visible; Kiro gets CLI agent hooks plus IDE `.kiro.hook` files and uses `/dl-status` for Taphelu-specific state where custom statusline support is not available.
+Runtime adapters target Claude, Kiro, Codex, and Gemini from the same canonical pack. `full-auto` install generates MCP config, skills, specialist agents or role fallbacks, slash commands, hooks, and runtime-appropriate status integration. `taphelu-lead` stays in the main session, while specialist roles are delegated. Claude gets native `statusLine`; Gemini keeps native footer model/context visible; Kiro gets CLI agent hooks globally and workspace-local IDE `.kiro.hook` files with local install, then uses `/dl-status` for Taphelu-specific state where custom statusline support is not available.
 
 ## Beta Testing
 

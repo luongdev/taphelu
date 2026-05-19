@@ -72,6 +72,13 @@ dl install --runtime kiro --scope global --write
 dl doctor --runtime kiro --scope global --live
 ```
 
+Kiro IDE Agent Hooks are per workspace. To see Taphelu hooks in the Kiro panel for a test repo, also run this inside that repo:
+
+```bash
+dl install --runtime kiro --scope local --write
+dl doctor --runtime kiro --scope local --live
+```
+
 Codex:
 
 ```bash
