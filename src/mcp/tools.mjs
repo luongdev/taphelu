@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findProjectRoot, readProjectFile, writeTextFileAtomic } from "../project.mjs";
-import { section, replaceSection } from "../utils.mjs";
+import { gitRootOrCwd, section, replaceSection } from "../utils.mjs";
 import { analyzeVerification, recordVerification } from "../commands/verify.mjs";
 import { analyzeContextCleanup, applyContextCleanup, publicContextCleanupSummary } from "../commands/cleanup.mjs";
+import { analyzeContractsCheck, analyzeContractsCurrent, analyzeContractsDeps, analyzeContractsInit, analyzeContractsLink, analyzeContractsMap, analyzeContractsScan, analyzeContractsSync, applyContractsInit, applyContractsLink, applyContractsMap, applyContractsScan, applyContractsSync } from "../commands/contracts.mjs";
 import { analyzeDeepScanPlan, analyzeProjectScan, analyzeScanInterview, analyzeServiceTopology, applyDeepScanPlan, applyProjectScan, applyScanInterview, applyServiceTopology } from "../commands/scan.mjs";
 import { analyzeContextIndex, analyzeMilestoneCompaction, analyzePlanCompaction, analyzeRunsCompaction, applyContextIndex, applyMilestoneCompaction, applyPlanCompaction, applyRunsCompaction, getContextArtifact, publicCompactionSummary, publicContextIndexSummary, readExistingContextIndex, searchContextArtifacts } from "../context-store.mjs";
 import { evaluateCrossAiReview } from "../review-policy.mjs";
@@ -114,6 +115,20 @@ export const TAPHELU_MCP_TOOLS = [
     objective: stringSchema("Scan objective: onboarding, refactor, bugfix, migration, architecture review, testing, etc."),
     contract_source: arraySchema("Source of truth for API/service contracts."),
     restricted_area: arraySchema("Sensitive, generated, off-limits, or low-value areas for deep scan."),
+  }),
+  tool("dl_contracts", "Manage a shared polyrepo service interaction registry with preview-first init, link, scan, map, check, current, deps, and gated git sync.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    action: stringSchema("Action: init, link, scan, map, check, current, deps, or sync. Defaults to check."),
+    path: stringSchema("Registry path for init/link/map/check/sync, or service scan path for action=scan/current/deps. Defaults to .taphelu/contracts for registry actions and . for service actions."),
+    contracts_path: stringSchema("Registry path for action=scan/current/deps. Defaults to .taphelu/contracts."),
+    remote: stringSchema("Remote URL for action=init when adding a submodule."),
+    mode: stringSchema("Service scan mode for action=scan: quick, standard, or deep."),
+    service: stringSchema("Service id for action=current/deps. Defaults to current repo service."),
+    direction: stringSchema("For action=deps: outbound, inbound, or all."),
+    strict: booleanSchema("For action=check: fail on unknown dependencies/providers instead of warning."),
+    write: booleanSchema("Whether to write registry/project files for init/link/scan/map. Defaults to false preview."),
+    commit: booleanSchema("Whether action=sync may commit registry changes. Defaults to false preview."),
+    push: booleanSchema("Whether action=sync may push after commit. Requires commit=true."),
   }),
   tool("dl_memory_search", "Search L1/L2 structured memory with source IDs.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -390,6 +405,59 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
     userError("Invalid dl_scan_project action. Expected scan, interview, plan, or map.");
   }
 
+  if (name === "dl_contracts") {
+    const action = String(args.action || "check").trim() || "check";
+    const input = {
+      ...args,
+      path: args.path || (action === "scan" || action === "current" || action === "deps" ? "." : ".taphelu/contracts"),
+      "contracts-path": args.contracts_path || args["contracts-path"] || ".taphelu/contracts",
+    };
+    if (action === "init") {
+      const report = analyzeContractsInit(root, input);
+      if (args.write) applyContractsInit(root, report);
+      return { action, report, wrote: Boolean(args.write), nextRoute: report.nextRoute };
+    }
+    if (action === "link") {
+      const report = analyzeContractsLink(root, input);
+      if (args.write) applyContractsLink(root, report);
+      return { action, report, wrote: Boolean(args.write), nextRoute: report.nextRoute };
+    }
+    if (action === "scan") {
+      const report = analyzeContractsScan(root, input);
+      if (args.write) applyContractsScan(root, report);
+      return { action, report, wrote: Boolean(args.write), nextRoute: report.nextRoute };
+    }
+    if (action === "map") {
+      const report = analyzeContractsMap(root, input);
+      if (args.write) applyContractsMap(root, report);
+      return { action, report, wrote: Boolean(args.write), nextRoute: report.nextRoute };
+    }
+    if (action === "check") {
+      const report = analyzeContractsCheck(root, input);
+      return { action, report, nextRoute: report.nextRoute };
+    }
+    if (action === "current") {
+      const report = analyzeContractsCurrent(root, input);
+      return { action, report, nextRoute: report.nextRoute };
+    }
+    if (action === "deps") {
+      const report = analyzeContractsDeps(root, input);
+      return { action, report, nextRoute: report.nextRoute };
+    }
+    if (action === "sync") {
+      if (args.push && !args.commit) userError("dl_contracts action=sync requires commit=true when push=true.");
+      const report = analyzeContractsSync(root, input);
+      if (args.commit || args.push) applyContractsSync(root, report);
+      return {
+        action,
+        report,
+        wrote: Boolean(args.commit || args.push),
+        nextRoute: report.nextRoute,
+      };
+    }
+    userError("Invalid dl_contracts action. Expected init, link, scan, map, check, current, deps, or sync.");
+  }
+
   if (name === "dl_conversation_search") {
     return {
       records: searchConversation(root, { query: args.query, limit: args.limit }),
@@ -471,6 +539,7 @@ function updateStateSection(root, heading, body) {
 function resolveRootForTool(name, cwd) {
   const root = findProjectRoot(cwd);
   if (!root && name === "dl_scan_project") return cwd;
+  if (!root && name === "dl_contracts") return gitRootOrCwd(cwd);
   if (!root) userError("No .projects/PROJECT.md found from current directory upward.");
   return root;
 }
@@ -547,6 +616,7 @@ function normalizeToolName(name) {
     taphelu_context_store: "dl_context_store",
     taphelu_review_status: "dl_review_status",
     taphelu_scan_project: "dl_scan_project",
+    taphelu_contracts: "dl_contracts",
   };
   return aliases[name] || name;
 }

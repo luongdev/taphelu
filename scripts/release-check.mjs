@@ -32,13 +32,13 @@ function main() {
   assertCleanGit();
   assertVersionIsPublishable();
   assertNpmAuth();
-  run("npm run check", "npm", ["run", "check"]);
-  run("npm test", "npm", ["test"]);
-  run("npm run test:cli", "npm", ["run", "test:cli"]);
-  run("npm run test:runtime-install", "npm", ["run", "test:runtime-install"]);
+  run("pnpm run check", "pnpm", ["run", "check"]);
+  run("pnpm test", "pnpm", ["test"]);
+  run("pnpm run test:cli", "pnpm", ["run", "test:cli"]);
+  run("pnpm run test:runtime-install", "pnpm", ["run", "test:runtime-install"]);
   assertPackDryRun();
   console.log(`release:check PASS for ${pkg.name}@${pkg.version}`);
-  console.log("Manual publish command: npm publish --access public");
+  console.log("Manual publish command: pnpm publish --access public");
 }
 
 function assertCleanGit() {
@@ -52,49 +52,51 @@ function assertCleanGit() {
 
 function assertVersionIsPublishable() {
   const spec = `${pkg.name}@${pkg.version}`;
-  const result = capture("npm", ["view", spec, "version", "--json"]);
+  const result = capture("pnpm", ["view", spec, "version", "--json"]);
   if (result.status === 0) {
     fail(`${spec} already exists on npm. Bump package.json version before publishing.`);
   }
   if (!isNpmNotFound(result)) {
     fail(`Unable to verify npm package version for ${spec}`, result);
   }
-  console.log(`npm version: ${spec} is not published yet`);
+  console.log(`registry version: ${spec} is not published yet`);
 }
 
 function assertNpmAuth() {
-  const result = capture("npm", ["whoami"]);
+  const result = capture("pnpm", ["whoami"]);
   if (result.status !== 0) {
-    fail("npm auth: not logged in. Run `npm login`, then rerun `npm run release:check`.", result);
+    fail("registry auth: not logged in. Run `pnpm login`, then rerun `pnpm run release:check`.", result);
   }
-  console.log(`npm auth: logged in as ${result.stdout.trim()}`);
+  console.log(`registry auth: logged in as ${result.stdout.trim()}`);
 }
 
 function assertPackDryRun() {
-  const result = capture("npm", ["pack", "--dry-run", "--json"]);
-  if (result.status !== 0) fail("npm pack --dry-run --json failed", result);
+  const result = capture("pnpm", ["pack", "--dry-run", "--json"]);
+  if (result.status !== 0) fail("pnpm pack --dry-run --json failed", result);
 
   let packed;
   try {
-    packed = JSON.parse(result.stdout)[0];
+    const parsed = JSON.parse(result.stdout);
+    packed = Array.isArray(parsed) ? parsed[0] : parsed;
   } catch (error) {
-    fail(`Unable to parse npm pack dry-run JSON: ${error.message}`);
+    fail(`Unable to parse pnpm pack dry-run JSON: ${error.message}`);
   }
 
   const paths = new Set((packed.files ?? []).map((file) => file.path));
   for (const file of requiredPackFiles) {
-    if (!paths.has(file)) fail(`npm pack missing required file: ${file}`);
+    if (!paths.has(file)) fail(`pnpm pack missing required file: ${file}`);
   }
 
   for (const path of paths) {
     for (const prefix of forbiddenPackPrefixes) {
       if (path === prefix.slice(0, -1) || path.startsWith(prefix)) {
-        fail(`npm pack includes forbidden local file: ${path}`);
+        fail(`pnpm pack includes forbidden local file: ${path}`);
       }
     }
   }
 
-  console.log(`npm pack: ${packed.files.length} files, ${packed.unpackedSize} bytes unpacked`);
+  const size = packed.unpackedSize ? `, ${packed.unpackedSize} bytes unpacked` : "";
+  console.log(`pnpm pack: ${packed.files.length} files${size}`);
 }
 
 function run(label, command, args) {

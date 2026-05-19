@@ -2,29 +2,29 @@
 
 Use this checklist before publishing `@luongdev/taphelu`.
 
-Publishing is manual. Do not run `npm publish` until the release has been reviewed and approved.
+Publishing is manual. Runtime install docs and release commands use `pnpm`.
 
 ## Pre-Publish Checks
 
 Run the full guard from a clean checkout:
 
 ```bash
-npm run release:check
+pnpm run release:check
 ```
 
-`release:check` does not publish. It verifies the working tree is clean, the exact `package.json` version is not already published, npm auth is available, baseline tests pass, runtime install E2E passes, and the dry-run tarball has the expected contents.
+`release:check` does not publish. It verifies the working tree is clean, the exact `package.json` version is not already published, npm registry auth is available, baseline tests pass, runtime install E2E passes, and the dry-run tarball has the expected contents.
 
-For test publishes before a stable release, use prerelease build versions such as `0.1.0-build.1`, `0.1.0-build.2`, and `0.1.0-build.3`. Reserve stable `0.1.0` for the first build that has passed beta feedback.
+For future test publishes, use prerelease build versions such as `0.1.1-build.1`. Keep stable versions for builds that have passed the release gate.
 
 The expanded command sequence is:
 
 ```bash
 git status --short
-npm run check
-npm test
-npm run test:cli
-npm run test:runtime-install
-npm pack --dry-run --json
+pnpm run check
+pnpm test
+pnpm run test:cli
+pnpm run test:runtime-install
+pnpm pack --dry-run --json
 ```
 
 Confirm the dry-run tarball includes:
@@ -51,12 +51,16 @@ Confirm the dry-run tarball excludes:
 
 ```bash
 TMP="$(mktemp -d)"
-npm pack --pack-destination "$TMP" >"$TMP/pack-name.txt"
-PKG="$TMP/$(cat "$TMP/pack-name.txt")"
-npm install -g --prefix "$TMP/prefix" "$PKG"
-"$TMP/prefix/bin/dl" commands
-"$TMP/prefix/bin/dl" scan --path . --mode quick
-INSTALLED_ROOT="$(npm root -g --prefix "$TMP/prefix")/@luongdev/taphelu"
+PNPM_HOME="$TMP/pnpm-home"
+export PNPM_HOME
+PATH="$PNPM_HOME:$PATH"
+export PATH
+pnpm pack --pack-destination "$TMP" >/dev/null
+PKG="$(find "$TMP" -name '*.tgz' -print -quit)"
+pnpm add -g "$PKG"
+"$PNPM_HOME/dl" commands
+"$PNPM_HOME/dl" scan --path . --mode quick
+INSTALLED_ROOT="$(pnpm root -g)/@luongdev/taphelu"
 node --check "$INSTALLED_ROOT/bin/taphelu-mcp.mjs"
 ```
 
@@ -66,10 +70,14 @@ Use temp config roots so local runtime settings are not mutated:
 
 ```bash
 TMP="$(mktemp -d)"
-npm pack --pack-destination "$TMP" >"$TMP/pack-name.txt"
-PKG="$TMP/$(cat "$TMP/pack-name.txt")"
-npm install -g --prefix "$TMP/prefix" "$PKG"
-DL="$TMP/prefix/bin/dl"
+PNPM_HOME="$TMP/pnpm-home"
+export PNPM_HOME
+PATH="$PNPM_HOME:$PATH"
+export PATH
+pnpm pack --pack-destination "$TMP" >/dev/null
+PKG="$(find "$TMP" -name '*.tgz' -print -quit)"
+pnpm add -g "$PKG"
+DL="$PNPM_HOME/dl"
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --dry-run
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --write
 "$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime" --live
@@ -92,9 +100,9 @@ Record:
 Only after manual approval:
 
 ```bash
-npm login
-npm whoami
-npm publish --access public --otp <code>
+pnpm login
+pnpm whoami
+pnpm publish --access public --otp <code>
 ```
 
 ## Post-Publish Smoke
@@ -102,13 +110,17 @@ npm publish --access public --otp <code>
 Use a temp prefix so the smoke test does not mutate the user's global install or runtime config:
 
 ```bash
-npm view @luongdev/taphelu version
+pnpm view @luongdev/taphelu version
 TMP="$(mktemp -d)"
-npm install -g --prefix "$TMP/prefix" @luongdev/taphelu
-DL="$TMP/prefix/bin/dl"
+PNPM_HOME="$TMP/pnpm-home"
+export PNPM_HOME
+PATH="$PNPM_HOME:$PATH"
+export PATH
+pnpm add -g @luongdev/taphelu
+DL="$PNPM_HOME/dl"
 "$DL" commands
 "$DL" scan --path . --mode quick
-INSTALLED_ROOT="$(npm root -g --prefix "$TMP/prefix")/@luongdev/taphelu"
+INSTALLED_ROOT="$(pnpm root -g)/@luongdev/taphelu"
 node --check "$INSTALLED_ROOT/bin/taphelu-mcp.mjs"
 "$DL" install --runtime all --scope global --config-dir "$TMP/runtime" --write
 "$DL" doctor --runtime all --scope global --config-dir "$TMP/runtime" --live

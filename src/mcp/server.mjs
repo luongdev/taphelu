@@ -19,7 +19,7 @@ export async function handleMcpMessage(message, cwd = process.cwd()) {
       result: {
         protocolVersion: params.protocolVersion || "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "taphelu", version: "0.0.0" },
+        serverInfo: { name: "taphelu", version: "0.1.0" },
       },
     };
   }

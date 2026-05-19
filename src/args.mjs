@@ -10,6 +10,18 @@ export function parseArgs(args) {
       options.write = true;
       continue;
     }
+    if (arg === "--commit") {
+      options.commit = true;
+      continue;
+    }
+    if (arg === "--push") {
+      options.push = true;
+      continue;
+    }
+    if (arg === "--strict") {
+      options.strict = true;
+      continue;
+    }
     if (arg === "--dry-run") {
       options["dry-run"] = true;
       continue;
@@ -678,6 +690,42 @@ export function parseArgs(args) {
     }
     if (arg === "--path") {
       options.path = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--remote=")) {
+      options.remote = arg.slice("--remote=".length);
+      continue;
+    }
+    if (arg === "--remote") {
+      options.remote = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--service=")) {
+      options.service = arg.slice("--service=".length);
+      continue;
+    }
+    if (arg === "--service") {
+      options.service = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--direction=")) {
+      options.direction = arg.slice("--direction=".length);
+      continue;
+    }
+    if (arg === "--direction") {
+      options.direction = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--contracts-path=")) {
+      options["contracts-path"] = arg.slice("--contracts-path=".length);
+      continue;
+    }
+    if (arg === "--contracts-path") {
+      options["contracts-path"] = requiredValue(args, i, arg);
       i += 1;
       continue;
     }

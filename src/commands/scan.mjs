@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs, parseMode } from "../args.mjs";
 import { EVENT_TYPES } from "../constants.mjs";
@@ -67,6 +67,7 @@ const ENTRYPOINT_NAMES = [
 ];
 
 const TOPOLOGY_FOCUS = new Set(["services", "contracts", "topology", "all"]);
+const MAX_CONTRACT_SNIFF_BYTES = 1024 * 1024;
 
 export function runScan(root, rawArgs) {
   const [subcommand, ...rest] = rawArgs;
@@ -944,10 +945,10 @@ function deploySignalForFile(path) {
 function contractSignalForFile(file) {
   const path = file.relativePath.replaceAll("\\", "/");
   const lower = path.toLowerCase();
-  if (/(^|\/)(openapi|swagger)[^/]*\.(ya?ml|json)$/u.test(lower)) {
+  if (/(^|\/)(openapi|swagger)[^/]*\.(ya?ml|json)$/u.test(lower) || (/(^|\/)(openapi|swagger)\/.+\.(ya?ml|json)$/u.test(lower) && looksLikeContractSpec(file.path, "openapi"))) {
     return { protocol: "openapi", surface: file.name, confidence: "high" };
   }
-  if (/(^|\/)asyncapi[^/]*\.(ya?ml|json)$/u.test(lower)) {
+  if (/(^|\/)asyncapi[^/]*\.(ya?ml|json)$/u.test(lower) || (/(^|\/)asyncapi\/.+\.(ya?ml|json)$/u.test(lower) && looksLikeContractSpec(file.path, "asyncapi"))) {
     return { protocol: "asyncapi", surface: file.name, confidence: "high" };
   }
   if (lower.endsWith(".graphql") || lower.endsWith(".gql") || lower.includes("/graphql/")) {
@@ -963,6 +964,18 @@ function contractSignalForFile(file) {
     return { protocol: "docs", surface: file.name, confidence: "low" };
   }
   return null;
+}
+
+function looksLikeContractSpec(path, key) {
+  try {
+    if (statSync(path).size > MAX_CONTRACT_SNIFF_BYTES) return false;
+    const content = readFileSync(path, "utf8").slice(0, 4096);
+    if (key === "openapi") return /(^|\n)\s*(openapi|swagger)\s*[:{]/iu.test(content);
+    if (key === "asyncapi") return /(^|\n)\s*asyncapi\s*[:{]/iu.test(content);
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function routeSurface(path) {
@@ -1497,10 +1510,10 @@ function detectServiceSignals(files, packageFiles) {
 
   if (lowerPaths.some((path) => /(^|\/)(docker-compose|compose)\.ya?ml$/u.test(path))) add("Docker Compose");
   if (lowerPaths.some((path) => /(^|\/)(chart\.yaml|kustomization\.ya?ml)$/u.test(path) || /(^|\/)(k8s|kubernetes|helm)\//u.test(path))) add("Kubernetes/Helm");
-  if (lowerPaths.some((path) => /(^|\/)(openapi|swagger)[^/]*\.(ya?ml|json)$/u.test(path))) add("OpenAPI/Swagger");
+  if (lowerPaths.some((path) => /(^|\/)(openapi|swagger)[^/]*\.(ya?ml|json)$/u.test(path) || /(^|\/)(openapi|swagger)\/.+\.(ya?ml|json)$/u.test(path))) add("OpenAPI/Swagger");
   if (lowerPaths.some((path) => path.endsWith(".graphql") || path.endsWith(".gql") || path.includes("/graphql/"))) add("GraphQL");
   if (lowerPaths.some((path) => path.endsWith(".proto") || path.includes("/grpc/"))) add("protobuf/gRPC");
-  if (lowerPaths.some((path) => /(^|\/)asyncapi[^/]*\.(ya?ml|json)$/u.test(path))) add("AsyncAPI");
+  if (lowerPaths.some((path) => /(^|\/)asyncapi[^/]*\.(ya?ml|json)$/u.test(path) || /(^|\/)asyncapi\/.+\.(ya?ml|json)$/u.test(path))) add("AsyncAPI");
   if (lowerPaths.some((path) => /(^|\/)(routes?|controllers?|handlers?)\//u.test(path) || /(^|\/)(routes?|controllers?|handlers?)\.[cm]?[jt]sx?$/u.test(path) || path.includes("/app/api/") || path.includes("/pages/api/"))) add("route/controller files");
   if (names.has("serverless.yml") || names.has("serverless.yaml")) add("serverless config");
 

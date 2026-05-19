@@ -1,4 +1,6 @@
 
+import { spawnSync } from "node:child_process";
+
 
 export function section(markdown, heading) {
   const marker = `## ${heading}`;
@@ -77,6 +79,15 @@ export function unsafeMemory(value) {
     /\braw log\b/i,
     /\bfull log\b/i,
   ].some((pattern) => pattern.test(text));
+}
+
+export function gitRootOrCwd(cwd) {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (result.error || result.status !== 0) return cwd;
+  return result.stdout.trim() || cwd;
 }
 
 export function unsafeBrowserArtifact(value) {

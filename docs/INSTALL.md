@@ -3,20 +3,20 @@
 Install the published package:
 
 ```bash
-npm install -g @luongdev/taphelu
+pnpm add -g @luongdev/taphelu
 ```
 
-Current npm test build:
+Current stable release:
 
 ```bash
-0.1.0-build.2
+0.1.0
 ```
 
-Before publish, install from a local tarball:
+For source checkout testing, install from a local tarball:
 
 ```bash
-npm pack
-npm install -g ./luongdev-taphelu-*.tgz
+pnpm pack
+pnpm add -g ./luongdev-taphelu-*.tgz
 ```
 
 Validate the binaries:
@@ -35,7 +35,7 @@ Beta testing:
 
 Taphelu install is generated from `taphelu-pack`.
 
-Default install profile for beta is `full-auto`: MCP, skills, agents/role fallbacks, slash/init commands, guarded hooks, and runtime-appropriate status. Claude gets a native `statusLine`; Gemini keeps native footer model/context visible; Kiro uses its native TUI status plus `/dl-status`; Codex uses `/dl-status` fallback.
+Default install profile is `full-auto`: MCP, skills, agents/role fallbacks, slash/init commands, guarded hooks, and runtime-appropriate status. Claude gets a native `statusLine`; Gemini keeps native footer model/context visible; Kiro uses its native TUI status plus `/dl-status`; Codex uses `/dl-status` fallback.
 
 Dry run first:
 
@@ -75,7 +75,7 @@ Claude Code can also register the MCP server through its own CLI:
 
 ```bash
 NODE_BIN="$(command -v node)"
-MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
+MCP_BIN="$(pnpm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
 claude mcp add -e TAPHELU_MANAGED=1 --transport stdio --scope user taphelu -- "$NODE_BIN" "$MCP_BIN"
 dl doctor --runtime claude --scope global --live
 ```
@@ -88,7 +88,7 @@ Kiro can also register the MCP server through `kiro-cli`:
 
 ```bash
 NODE_BIN="$(command -v node)"
-MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
+MCP_BIN="$(pnpm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
 kiro-cli mcp add --scope global --name taphelu --command "$NODE_BIN" --args "$MCP_BIN" --env TAPHELU_MANAGED=1 --force
 ```
 
@@ -118,16 +118,16 @@ dl runtime status --runtime claude --scope global --live
 Package runtime E2E:
 
 ```bash
-npm run test:runtime-install
+pnpm run test:runtime-install
 ```
 
 Pre-publish guard:
 
 ```bash
-npm run release:check
+pnpm run release:check
 ```
 
-This command never publishes. It requires a clean git tree and npm login before running the release test gate.
+This command never publishes. It requires a clean git tree and npm registry login before running the release test gate.
 
 Existing unmanaged adapter files block installation. Remove them or migrate them before reinstalling.
 

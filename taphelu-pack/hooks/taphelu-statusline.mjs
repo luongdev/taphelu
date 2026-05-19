@@ -2,8 +2,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { homedir } from "node:os";
 
 const input = readJsonStdin();
 const cwd = input.workspace?.current_dir || input.cwd || process.cwd();
@@ -27,8 +25,6 @@ const current = summarizeCurrentState({
   roadmapStatus: roadmap?.status || "",
 });
 const next = summarizeNext(firstLine((stateIsStale ? roadmap?.next : state["Next Action"]) || roadmap?.next || "no next action"));
-const memory = memorySummary(root);
-const context = projectContextSummary(root);
 const dirty = gitDirty(root) ? "dirty" : "clean";
 
 console.log([
@@ -37,8 +33,6 @@ console.log([
   milestone,
   current,
   `next:${next}`,
-  memory,
-  context,
   `git:${dirty}`,
 ].filter(Boolean).join(" | "));
 
@@ -190,30 +184,6 @@ function cleanStateText(value) {
     .trim();
 }
 
-function projectContextSummary(rootPath) {
-  const indexPath = path.join(rootPath, ".projects", "index.json");
-  const contextPath = path.join(rootPath, ".projects", "CONTEXT.md");
-  if (fs.existsSync(indexPath)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-      const artifacts = Array.isArray(parsed.artifacts) ? parsed.artifacts.length : 0;
-      return `proj:index:${artifacts}`;
-    } catch {
-      return "proj:index-broken";
-    }
-  }
-  if (fs.existsSync(contextPath)) return `proj:compact:${formatSize(fileSize(contextPath))}`;
-  return "proj:raw";
-}
-
-function memorySummary(rootPath) {
-  const dbPath = memoryDbPath(rootPath);
-  if (!fs.existsSync(dbPath)) return "mem:none";
-  const counts = sqliteCounts(dbPath);
-  if (!counts) return `mem:db:${formatSize(fileSize(dbPath))}`;
-  return `mem:L0:${counts.l0}/L1:${counts.l1}/L2:${counts.l2}/L3:${counts.l3}`;
-}
-
 function currentRoadmapStatus(rootPath) {
   const roadmapPath = path.join(rootPath, ".projects", "ROADMAP.md");
   if (!fs.existsSync(roadmapPath)) return null;
@@ -243,45 +213,6 @@ function currentRecommendedNext(markdown) {
   const rest = markdown.slice(match.index + match[0].length);
   const nextHeading = /^##\s+/m.exec(rest);
   return firstLine(nextHeading ? rest.slice(0, nextHeading.index) : rest);
-}
-
-function sqliteCounts(dbPath) {
-  try {
-    const output = execFileSync("sqlite3", [
-      dbPath,
-      "SELECT (SELECT COUNT(*) FROM l0_records)||'|'||(SELECT COUNT(*) FROM l1_memories)||'|'||(SELECT COUNT(*) FROM l2_scenes)||'|'||(SELECT COUNT(*) FROM l3_profile);",
-    ], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 1000 }).trim();
-    const [l0, l1, l2, l3] = output.split("|").map((value) => Number.parseInt(value, 10));
-    if ([l0, l1, l2, l3].some((value) => !Number.isFinite(value))) return null;
-    return { l0, l1, l2, l3 };
-  } catch {
-    return null;
-  }
-}
-
-function memoryDbPath(rootPath) {
-  if (process.env.TAPHELU_MEMORY_DB) return process.env.TAPHELU_MEMORY_DB;
-  const base = process.env.TAPHELU_HOME || path.join(homedir(), ".taphelu");
-  return path.join(base, "memory", workspaceKey(rootPath), "taphelu.db");
-}
-
-function workspaceKey(rootPath) {
-  const digest = createHash("sha256").update(rootPath).digest("hex").slice(0, 16);
-  const slug = rootPath.split(/[\\/]/).filter(Boolean).at(-1)?.replace(/[^a-z0-9._-]+/gi, "-") || "workspace";
-  return `${slug}-${digest}`;
-}
-
-function fileSize(file) {
-  try {
-    return fs.existsSync(file) ? fs.statSync(file).size : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes}B`;
-  return `${Math.ceil(bytes / 1024)}K`;
 }
 
 function truncate(value, limit) {

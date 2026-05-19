@@ -26,8 +26,7 @@ dl doctor --runtime all --scope global --live
 If `dl` is not found:
 
 ```bash
-npm prefix -g
-npm bin -g
+pnpm bin -g
 command -v dl
 ```
 
@@ -109,6 +108,21 @@ dl scan map --path . --mode standard --focus all --write
 - `.projects/graphs/service-graph.json`
 - `.projects/graphs/service-graph.mmd`
 
+For polyrepo systems, keep shared service interactions in a registry repo or submodule:
+
+```bash
+dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git
+dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
+dl contracts scan --path . --mode standard
+dl contracts scan --path . --mode standard --write
+dl contracts check --strict
+dl contracts current --path .
+dl contracts deps --direction all
+dl contracts map --write
+```
+
+The registry stores service metadata, API contracts, Kafka/queue/topic/pubsub/Redis interaction metadata, and graph artifacts under `.taphelu/contracts`. It is the source of truth for cross-service planning when `dl contracts check --strict` passes. If service implementation and registry disagree, stop and resolve the conflict before planning.
+
 ## Project Context Files
 
 Common `.projects` files:
@@ -174,7 +188,7 @@ Verify work:
 ```bash
 dl verify \
   --artifact src/accounts/delete.js \
-  --test "npm test" \
+  --test "pnpm test" \
   --reviewed \
   "Account deletion implementation"
 ```
@@ -184,7 +198,7 @@ Write state only when the report is acceptable:
 ```bash
 dl verify --write \
   --artifact src/accounts/delete.js \
-  --test "npm test" \
+  --test "pnpm test" \
   --reviewed \
   --next-action "Ship after reviewer approves account deletion behavior" \
   "Account deletion implementation"
@@ -378,6 +392,7 @@ Generated runtime commands use `/dl-*`:
 - `/dl-init`
 - `/dl-resume`
 - `/dl-scan`
+- `/dl-contracts`
 - `/dl-plan`
 - `/dl-close`
 - `/dl-status`
@@ -397,6 +412,7 @@ Primary tool names use `dl_*`:
 - `dl_memory_search`
 - `dl_conversation_search`
 - `dl_scan_project`
+- `dl_contracts`
 - `dl_context_store`
 - `dl_cleanup_context`
 
@@ -535,7 +551,7 @@ If Claude MCP is stuck connecting, run doctor with `--live` and check for local 
 Uninstall package:
 
 ```bash
-npm uninstall -g @luongdev/taphelu
+pnpm remove -g @luongdev/taphelu
 ```
 
 Project-local context:

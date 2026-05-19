@@ -12,6 +12,7 @@ export const COMMAND_MANIFEST = [
   { name: "browser", usage: "dl browser research|verify ...", summary: "Produce gated browser research or E2E verification reports." },
   { name: "import", usage: "dl import bmad|gsd|superpower|project [--path path]", summary: "Import external workflow context." },
   { name: "scan", usage: "dl scan [interview|plan|map] [--path .] [--mode quick|standard|deep] [--focus services|contracts|topology|all] [--write]", summary: "Scan an existing project, ask domain questions, create deep-scan packets, or map services/contracts." },
+  { name: "contracts", usage: "dl contracts init|link|scan|current|deps|map|check|sync [--path .taphelu/contracts] [--write|--strict|--commit|--push]", summary: "Manage a shared polyrepo service interaction registry for APIs, events, queues, pub/sub, and service metadata." },
   { name: "review", usage: "dl review status|plan [--runtime name] [--review-trigger text]", summary: "Evaluate permission-gated cross-AI review policy." },
   { name: "cleanup", usage: "dl cleanup context [--limit n] [--write]", summary: "Preview or write compact project context cleanup." },
   { name: "context", usage: "dl context index|search|get ...", summary: "Index, search, and fetch compact project context artifacts." },

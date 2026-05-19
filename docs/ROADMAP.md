@@ -4,29 +4,30 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, and npm test build `0.1.0-build.2`.
-- Current: beta feedback collection and dogfood fixes from real runtime sessions.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, polyrepo contract registry v1, service interaction registry, and stable release `0.1.0`.
+- Current: stable `0.1.0` release validation, dogfood fixes, and validation of shared contract registries on real polyrepo systems.
 - Next: choose the next implementation milestone from repeated tester friction.
 - Later: richer graph/index features.
 
-## v0.1 - npm-ready Local CLI/MCP Package
+## v0.1 - Registry-ready Local CLI/MCP Package
 
 Goal: make Taphelu installable and usable by another local repo without publishing surprises.
 
 Includes:
 
-- npm package metadata for `@luongdev/taphelu`.
+- Package metadata for `@luongdev/taphelu`.
+- License: `AGPL-3.0-or-later` copyleft.
 - Global CLI entrypoints: `dl` and `taphelu-mcp`.
 - Pack whitelist that includes `bin`, `src`, `scripts`, `taphelu-pack`, and `docs`.
 - README, LICENSE, install docs, and publish checklist.
-- Smoke tests for `npm pack`, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
-- Current npm test build target: `@luongdev/taphelu@0.1.0-build.2`.
+- Smoke tests for package pack, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
+- Current stable target: `@luongdev/taphelu@0.1.0`.
 
 Done when:
 
 - A user can install from a packed tarball and run the CLI/MCP entrypoints.
-- The npm tarball excludes `.projects`, `.samples`, tests, caches, and local runtime files.
-- Publish remains an explicit manual step guarded by `npm run release:check`.
+- The package tarball excludes `.projects`, `.samples`, tests, caches, and local runtime files.
+- Publish remains an explicit manual step guarded by `pnpm run release:check`.
 
 ## v0.1 Beta - Onboarding and Feedback
 
@@ -75,12 +76,14 @@ Includes:
 - Runtime install E2E for Codex, Claude, Gemini, and Kiro using temp homes/config dirs.
 - `dl doctor` validation for MCP config, generated adapter files, instruction hygiene, and package install health.
 - Runtime orchestration kit: skills, agents or role fallbacks, `/dl-*` commands, hooks, capability-based status surfaces, and live doctor.
+- Polyrepo service interaction registry: `.taphelu/contracts` layout, service metadata, protobuf/OpenAPI/AsyncAPI/GraphQL/schema support, Kafka/queue/topic/pubsub/Redis interaction metadata, graph artifacts, and gated git sync.
 
 Done when:
 
 - Taphelu can explain service relationships and contract sources without guessing.
 - Codex, Claude, Gemini, and Kiro can be configured from the same canonical pack.
 - Runtime-specific generated files remain managed artifacts, not hand-maintained copies.
+- Polyrepo agents can run `dl contracts check --strict`, identify current service, load inbound/outbound dependencies, and resolve interaction conflicts instead of guessing from implementation.
 
 ## Later
 

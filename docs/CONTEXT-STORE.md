@@ -22,6 +22,7 @@ Core commands:
 dl context index
 dl context index --write
 dl context search "service topology"
+dl context search "contract registry"
 dl context get milestone:M24
 dl context get scan:scan-plan-md --start-line 20 --end-line 60
 
@@ -54,3 +55,4 @@ Rules:
 - Keep `CONTEXT.md`, `STATE.md`, and `MEMORY.md` compact.
 - `STATE.md` is the source of truth for current goal/milestone/phase/next action; `CONTEXT.md` should only hold load policy and artifact pointers.
 - Do not write raw logs, raw browser content, secrets, PII, or source dumps into always-loaded context.
+- `.taphelu/contracts` registry artifacts are indexed as pointers/summaries. Agents should search first and load individual contract files only when needed.

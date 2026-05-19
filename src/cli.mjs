@@ -1,4 +1,5 @@
 import { findProjectRoot } from "./project.mjs";
+import { gitRootOrCwd } from "./utils.mjs";
 import { fail } from "./errors.mjs";
 import { printStatus } from "./commands/status.mjs";
 import { printCommands } from "./commands/commands.mjs";
@@ -19,6 +20,7 @@ import { runScan } from "./commands/scan.mjs";
 import { runContext } from "./commands/context.mjs";
 import { runCompact } from "./commands/compact.mjs";
 import { runRuntime } from "./commands/runtime.mjs";
+import { runContracts } from "./commands/contracts.mjs";
 
 export function main(argv = process.argv, cwd = process.cwd()) {
   const [, , command, ...args] = argv;
@@ -54,6 +56,7 @@ export function main(argv = process.argv, cwd = process.cwd()) {
   if (command === "context") return runContext(root, args);
   if (command === "compact") return runCompact(root, args);
   if (command === "runtime") return runRuntime(root, args);
+  if (command === "contracts") return runContracts(root, args);
 
   fail(`Unknown command: ${command}`);
 }
@@ -61,6 +64,7 @@ export function main(argv = process.argv, cwd = process.cwd()) {
 function bootstrapCommandRoot(command, args, cwd) {
   if (command === "commands" || command === "install" || command === "doctor" || command === "runtime") return cwd;
   if (command === "scan") return cwd;
+  if (command === "contracts") return gitRootOrCwd(cwd);
   if (command === "import" && args[0] === "project") return cwd;
   return null;
 }
@@ -91,6 +95,14 @@ Usage:
   dl scan plan [--path .] [--mode quick|standard|deep] [--domain text] [--objective text] [--write]
   dl scan map [--path .] [--mode quick|standard|deep] [--focus services|contracts|topology|all] [--write]
   dl scan --focus services|contracts|topology|all [--path .] [--mode quick|standard|deep] [--write]
+  dl contracts init --path .taphelu/contracts [--remote url] [--write]
+  dl contracts link --path .taphelu/contracts [--write]
+  dl contracts scan [--path .] [--contracts-path .taphelu/contracts] [--write]
+  dl contracts current [--path .] [--contracts-path .taphelu/contracts]
+  dl contracts deps [--service id] [--direction outbound|inbound|all] [--path .] [--contracts-path .taphelu/contracts]
+  dl contracts map [--path .taphelu/contracts] [--write]
+  dl contracts check [--path .taphelu/contracts] [--strict]
+  dl contracts sync [--path .taphelu/contracts] [--commit] [--push]
   dl review status|plan [--runtime codex|claude|gemini] [--review-trigger text] [--files n] [--commits n]
   dl cleanup context [--limit n] [--dry-run|--write]
   dl context index [--write]
@@ -120,6 +132,7 @@ Commands:
   browser   Produce gated browser research or E2E verification reports.
   import    Import external workflow context.
   scan      Scan an existing project into Taphelu context.
+  contracts Manage a shared polyrepo service contract registry.
   review    Evaluate permission-gated cross-AI review policy.
   cleanup   Preview or write compact project context cleanup.
   context   Index, search, or fetch project context artifacts.

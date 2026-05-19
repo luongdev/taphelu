@@ -16,6 +16,8 @@ Use the CLI primitives when MCP is unavailable or when a human-readable packet i
 - `dl_scan_project action=interview` before asking broad domain questions; ask the generated questions in chat instead of making the user type long CLI flags.
 - `dl scan plan` before deep analysis of large or unfamiliar codebases.
 - `dl scan map` after `dl scan plan` when service/API signals exist.
+- `dl_contracts action=check strict=true`, then `action=current`, then `action=deps direction=all` before planning polyrepo service changes.
+- `dl contracts scan` to import current repo contract evidence into the shared registry after approval.
 
 Keep packets concise. State assumptions, evidence, blockers, and next route.
 

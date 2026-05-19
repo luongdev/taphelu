@@ -51,15 +51,18 @@ Generated commands expose the same lifecycle in every runtime:
 - `/dl-init`
 - `/dl-resume`
 - `/dl-scan`
+- `/dl-contracts`
 - `/dl-plan`
 - `/dl-close`
 - `/dl-status`
+
+`/dl-contracts` uses the `dl_contracts` umbrella MCP tool. For polyrepo work, the lead/planner flow is: strict registry check, identify current service, load outbound and inbound dependency slice, then plan. The registry covers APIs, event streams, queues, topics, pub/sub, Redis channels/streams, and service metadata.
 
 Claude gets native commands, agents with `skills` frontmatter, hooks, and `statusLine`. The Claude statusline keeps live runtime facts first: model, effort when available, and `context_window.used_percentage`, then compact Taphelu state.
 
 Runtime status surfaces are capability-based:
 
-- Claude: native `statusLine` command script, including model, effort, context percentage, Taphelu phase/status, memory/index counts, and git dirty state.
+- Claude: native `statusLine` command script, including model, effort, context percentage, Taphelu phase/status, next action, and git dirty state.
 - Gemini: native CLI footer is configured to keep model info and context percentage visible; Taphelu-specific state remains available through `/dl-status`.
 - Kiro: native TUI status/progress remains runtime-owned; Taphelu-specific state is exposed through `/dl-status`, generated CLI agent JSON, workspace-local IDE `.kiro.hook` files, and generated skill context.
 - Codex: no verified custom statusline config surface in the installed CLI; Taphelu installs `/dl-status`, MCP, skills, and compact `AGENTS.md` pointer only.

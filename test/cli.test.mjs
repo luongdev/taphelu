@@ -220,6 +220,7 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`verify`/);
   assert.match(result.stdout, /`import`/);
   assert.match(result.stdout, /`scan`/);
+  assert.match(result.stdout, /`contracts`/);
   assert.match(result.stdout, /`review`/);
   assert.match(result.stdout, /`cleanup`/);
   assert.match(result.stdout, /`context`/);
@@ -257,6 +258,7 @@ test("mcp lists taphelu agent lifecycle tools", async () => {
   assert.ok(direct.includes("dl_cleanup_context"));
   assert.ok(direct.includes("dl_context_store"));
   assert.ok(direct.includes("dl_scan_project"));
+  assert.ok(direct.includes("dl_contracts"));
   assert.equal(direct.includes("taphelu_start"), false);
   assert.equal(response.result.tools.some((tool) => tool.name === "dl_observe"), true);
 });
@@ -302,6 +304,13 @@ test("mcp tool schemas expose handler-supported fields", () => {
   assert.ok(tools.dl_scan_project.inputSchema.properties.action);
   assert.ok(tools.dl_scan_project.inputSchema.properties.focus);
   assert.ok(tools.dl_scan_project.inputSchema.properties.core_flow);
+  assert.ok(tools.dl_contracts.inputSchema.properties.action);
+  assert.ok(tools.dl_contracts.inputSchema.properties.contracts_path);
+  assert.ok(tools.dl_contracts.inputSchema.properties.service);
+  assert.ok(tools.dl_contracts.inputSchema.properties.direction);
+  assert.ok(tools.dl_contracts.inputSchema.properties.strict);
+  assert.ok(tools.dl_contracts.inputSchema.properties.commit);
+  assert.ok(tools.dl_contracts.inputSchema.properties.push);
 });
 
 test("project file transaction rolls back touched project files", () => {
@@ -846,10 +855,10 @@ test("statusline does not wait forever without piped stdin", () => {
   assert.equal(result.error, undefined);
   assert.equal(result.status, 0);
   assert.doesNotMatch(result.stdout, /\$dl|ctx:0/);
+  assert.doesNotMatch(result.stdout, /mem:/);
+  assert.doesNotMatch(result.stdout, /proj:/);
   assert.match(result.stdout, /model:\?/);
   assert.match(result.stdout, /ctx:\?/);
-  assert.match(result.stdout, /proj:/);
-  assert.match(result.stdout, /mem:/);
 });
 
 test("statusline surfaces Claude model effort and context percentage from stdin", () => {
@@ -2432,6 +2441,330 @@ test("scan map respects ignore files and labels inferred edges", () => {
   assert.doesNotMatch(result.stdout, /ignored-openapi/);
   assert.match(result.stdout, /docs\/api-contract\.md/);
   assert.match(result.stdout, /inferred/);
+});
+
+test("contracts init previews and writes registry layout", () => {
+  const root = makePlainRepo();
+  const preview = run(root, ["contracts", "init", "--path", ".taphelu/contracts"]);
+
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /# Contract Registry Init/);
+  assert.equal(existsSync(join(root, ".taphelu")), false);
+
+  const written = run(root, ["contracts", "init", "--path", ".taphelu/contracts", "--write"]);
+  const registry = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "registry.json"), "utf8"));
+  const ignore = readFileSync(join(root, ".taphelu", "contracts", ".gitignore"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(written.status, 0, written.stderr);
+  assert.equal(registry.schemaVersion, 1);
+  assert.match(ignore, /\.env/);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "services")), true);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "interactions")), true);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "channels", "kafka")), true);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "channels", "redis-pubsub")), true);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "graphs")), true);
+  assert.equal(events.at(-1).type, "contracts_initialized");
+});
+
+test("contracts init rejects unsafe remote values", () => {
+  const root = makePlainRepo();
+  const result = run(root, ["contracts", "init", "--remote", "--upload-pack=touch /tmp/nope", "--write"]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Remote URL must not start/);
+  assert.equal(existsSync(join(root, ".taphelu")), false);
+});
+
+test("contracts rootless commands resolve git root from subdirectories", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "nested"), { recursive: true });
+  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8" }).status, 0);
+
+  const result = spawnSync(process.execPath, [cliPath, "contracts", "init", "--write"], {
+    cwd: join(root, "nested"),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "registry.json")), true);
+  assert.equal(existsSync(join(root, "nested", ".taphelu")), false);
+});
+
+test("contracts link writes project registry pointer", () => {
+  const root = makePlainRepo();
+  const init = run(root, ["contracts", "init", "--write"]);
+  const linked = run(root, ["contracts", "link", "--path", ".taphelu/contracts", "--write"]);
+  const contracts = readFileSync(join(root, ".projects", "CONTRACTS.md"), "utf8");
+  const events = readFileSync(join(root, ".projects", "events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(init.status, 0, init.stderr);
+  assert.equal(linked.status, 0, linked.stderr);
+  assert.match(contracts, /Contract Registry/);
+  assert.match(contracts, /\.taphelu\/contracts/);
+  assert.equal(events.at(-1).type, "contracts_linked");
+});
+
+test("contracts scan writes service metadata, copied specs, graph, and context index pointers", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@demo/billing-api", scripts: { test: "node --test" } }, null, 2));
+  mkdirSync(join(root, "proto", "billing", "v1"), { recursive: true });
+  mkdirSync(join(root, "openapi"), { recursive: true });
+  mkdirSync(join(root, "graphql"), { recursive: true });
+  writeFileSync(join(root, "proto", "billing", "v1", "billing.proto"), "syntax = \"proto3\";\n");
+  writeFileSync(join(root, "openapi", "billing.yaml"), "openapi: 3.0.0\ninfo:\n  title: Billing\n  version: 1.0.0\npaths: {}\n");
+  writeFileSync(join(root, "openapi", "notes.yaml"), "name: internal notes\n");
+  writeFileSync(join(root, "graphql", "schema.graphql"), "type Query { invoice: String }\n");
+
+  const init = run(root, ["contracts", "init", "--write"]);
+  const scanned = run(root, ["contracts", "scan", "--path", ".", "--mode", "quick", "--write"]);
+  const registry = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "registry.json"), "utf8"));
+  const service = registry.services.find((item) => item.id === "demo-billing-api");
+  const graph = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "graphs", "service-graph.json"), "utf8"));
+  const index = run(root, ["context", "index", "--write"]);
+  const contextIndex = JSON.parse(readFileSync(join(root, ".projects", "index.json"), "utf8"));
+
+  assert.equal(init.status, 0, init.stderr);
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.ok(service);
+  assert.ok(service.contracts.some((contract) => contract.protocol === "protobuf/grpc"));
+  assert.ok(service.contracts.some((contract) => contract.protocol === "openapi"));
+  assert.ok(!service.contracts.some((contract) => contract.source_path === "openapi/notes.yaml"));
+  assert.ok(service.contracts.every((contract) => !contract.path.includes("src/index.js")));
+  assert.equal(existsSync(join(root, ".taphelu", "contracts", "services", "demo-billing-api.yaml")), true);
+  assert.ok(service.contracts.some((contract) => existsSync(join(root, ".taphelu", "contracts", contract.path))));
+  assert.ok(graph.edges.some((edge) => edge.type === "exposes_contract"));
+  assert.equal(index.status, 0, index.stderr);
+  assert.ok(contextIndex.artifacts.some((artifact) => artifact.type === "contract" && artifact.path.includes(".taphelu/contracts")));
+});
+
+test("contracts scan imports service interactions and maps messaging edges", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@demo/billing-api", dependencies: { kafkajs: "^2.0.0" } }, null, 2));
+  mkdirSync(join(root, "asyncapi"), { recursive: true });
+  writeFileSync(join(root, "asyncapi", "events.yaml"), `asyncapi: 2.0.0
+servers:
+  production:
+    protocol: kafka
+channels:
+  invoice.approved:
+    publish:
+      message:
+        name: InvoiceApproved
+  ledger.updated:
+    subscribe:
+      message:
+        name: LedgerUpdated
+`);
+  writeFileSync(join(root, "taphelu-interactions.json"), JSON.stringify({
+    provides: [
+      { kind: "pubsub", protocol: "redis-pubsub", name: "billing.invalidate", confidence: "high" },
+      { kind: "event-stream", protocol: "redis-stream", name: "billing.stream", confidence: "high" },
+    ],
+    consumes: [
+      { kind: "queue", protocol: "sqs", name: "ledger-export", provider_service: "ledger-worker", confidence: "high" },
+      { kind: "event-stream", protocol: "redis-stream", name: "ledger.stream", provider_service: "ledger-worker", confidence: "high" },
+    ],
+  }, null, 2));
+
+  assert.equal(run(root, ["contracts", "init", "--write"]).status, 0);
+  const scanned = run(root, ["contracts", "scan", "--path", ".", "--mode", "quick", "--write"]);
+  const registry = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "registry.json"), "utf8"));
+  const service = registry.services.find((item) => item.id === "demo-billing-api");
+  const graph = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "graphs", "service-graph.json"), "utf8"));
+  const interactions = readFileSync(join(root, ".taphelu", "contracts", "interactions", "demo-billing-api.yaml"), "utf8");
+
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.ok(service.provides.some((item) => item.protocol === "kafka" && item.name === "invoice.approved"));
+  assert.ok(service.provides.some((item) => item.protocol === "redis-pubsub" && item.name === "billing.invalidate"));
+  assert.ok(service.provides.some((item) => item.protocol === "redis-stream" && item.name === "billing.stream"));
+  assert.ok(service.consumes.some((item) => item.protocol === "kafka" && item.name === "ledger.updated"));
+  assert.ok(service.consumes.some((item) => item.protocol === "sqs" && item.name === "ledger-export"));
+  assert.ok(service.consumes.some((item) => item.protocol === "redis-stream" && item.name === "ledger.stream"));
+  assert.ok(service.depends_on.includes("ledger-worker"));
+  assert.match(interactions, /billing.invalidate/);
+  assert.ok(graph.interactions.some((item) => item.name === "invoice.approved"));
+  assert.ok(graph.edges.some((edge) => edge.type === "publishes_to"));
+  assert.ok(graph.edges.some((edge) => edge.type === "subscribes_to"));
+  assert.ok(graph.edges.some((edge) => edge.type === "uses_cache_channel"));
+  assert.ok(graph.edges.some((edge) => edge.type === "consumes_queue"));
+  assert.ok(graph.edges.some((edge) => edge.type === "writes_stream"));
+  assert.ok(graph.edges.some((edge) => edge.type === "reads_stream"));
+});
+
+test("contracts current and deps return current service dependency slice", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@demo/billing-api" }, null, 2));
+  assert.equal(run(root, ["contracts", "init", "--write"]).status, 0);
+  const registryPath = join(root, ".taphelu", "contracts", "registry.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  registry.services = [
+    { id: "demo-billing-api", name: "Billing API", repo: "", root: ".", runtime: { language: "node" }, contracts: [], provides: [], consumes: [{ id: "demo-billing-api.consumes.kafka.identity-events", kind: "event-stream", protocol: "kafka", name: "identity.events", direction: "consumes", owner_service: "demo-billing-api", provider_service: "identity-api", consumer_services: [], confidence: "high", evidence: ["services/billing-api.yaml"] }], depends_on: ["identity-api"] },
+    { id: "identity-api", name: "Identity API", repo: "", root: ".", runtime: { language: "node" }, contracts: [], provides: [{ id: "identity-api.provides.kafka.identity-events", kind: "event-stream", protocol: "kafka", name: "identity.events", direction: "provides", owner_service: "identity-api", provider_service: "identity-api", consumer_services: ["demo-billing-api"], confidence: "high", evidence: ["services/identity-api.yaml"] }], consumes: [], depends_on: [] },
+  ];
+  registry.interactions = [...registry.services[0].consumes, ...registry.services[1].provides];
+  writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+
+  const current = run(root, ["contracts", "current", "--path", "."]);
+  const deps = run(root, ["contracts", "deps", "--service", "demo-billing-api", "--direction", "outbound"]);
+  const inbound = run(root, ["contracts", "deps", "--service", "identity-api", "--direction", "inbound"]);
+
+  assert.equal(current.status, 0, current.stderr);
+  assert.match(current.stdout, /billing-api/);
+  assert.match(current.stdout, /identity-api/);
+  assert.equal(deps.status, 0, deps.stderr);
+  assert.match(deps.stdout, /identity-api/);
+  assert.equal(inbound.status, 0, inbound.stderr);
+  assert.match(inbound.stdout, /billing-api/);
+});
+
+test("contracts check strict fails unknown dependency and consumed provider", () => {
+  const root = makePlainRepo();
+  assert.equal(run(root, ["contracts", "init", "--write"]).status, 0);
+  const registryPath = join(root, ".taphelu", "contracts", "registry.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  registry.services = [
+    { id: "demo-billing-api", name: "Billing API", repo: "", root: ".", runtime: { language: "node" }, contracts: [], provides: [], consumes: [{ id: "billing-api.consumes.kafka.ledger-events", kind: "event-stream", protocol: "kafka", name: "ledger.events", direction: "consumes", owner_service: "demo-billing-api", provider_service: "", consumer_services: [], confidence: "high", evidence: ["services/billing-api.yaml"] }], depends_on: ["missing-api"] },
+  ];
+  registry.interactions = registry.services[0].consumes;
+  writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+
+  const normal = run(root, ["contracts", "check"]);
+  const strict = run(root, ["contracts", "check", "--strict"]);
+
+  assert.equal(normal.status, 0, normal.stderr);
+  assert.match(normal.stdout, /`WARN`/);
+  assert.equal(strict.status, 0, strict.stderr);
+  assert.match(strict.stdout, /`FAIL`/);
+  assert.match(strict.stdout, /unknown provider/);
+  assert.match(strict.stdout, /depends_on unknown service/);
+});
+
+test("contracts scan blocks registry conflicts before writing", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@demo/billing-api" }, null, 2));
+  writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: Billing\n  version: 1.0.0\npaths: {}\n");
+  assert.equal(run(root, ["contracts", "init", "--write"]).status, 0);
+  assert.equal(run(root, ["contracts", "scan", "--path", ".", "--mode", "quick", "--write"]).status, 0);
+
+  mkdirSync(join(root, "asyncapi"), { recursive: true });
+  writeFileSync(join(root, "asyncapi", "events.yaml"), "asyncapi: 2.0.0\ninfo:\n  title: Events\n  version: 1.0.0\n");
+  const preview = run(root, ["contracts", "scan", "--path", ".", "--mode", "quick"]);
+  const write = run(root, ["contracts", "scan", "--path", ".", "--mode", "quick", "--write"]);
+
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /Service repo has contract missing from registry/);
+  assert.notEqual(write.status, 0);
+  assert.match(write.stderr, /Contract registry conflict detected/);
+});
+
+test("contracts map writes shared topology and sync is gated", () => {
+  const root = makePlainRepo();
+  assert.equal(run(root, ["contracts", "init", "--write"]).status, 0);
+  const registryPath = join(root, ".taphelu", "contracts", "registry.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  registry.services = [
+    {
+      id: "billing-api",
+      name: "Billing API",
+      repo: "git@example.com:billing.git",
+      root: ".",
+      owners: ["finance-platform"],
+      runtime: { language: "go", stack: ["Go module"] },
+      contracts: [{ protocol: "openapi", path: "openapi/billing.yaml", source_path: "openapi/billing.yaml", confidence: "high" }],
+      depends_on: ["identity-api"],
+    },
+    {
+      id: "identity-api",
+      name: "Identity API",
+      repo: "git@example.com:identity.git",
+      root: ".",
+      owners: [],
+      runtime: { language: "node", stack: ["Node.js package"] },
+      contracts: [],
+      depends_on: [],
+    },
+  ];
+  writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  mkdirSync(join(root, ".taphelu", "contracts", "openapi"), { recursive: true });
+  writeFileSync(join(root, ".taphelu", "contracts", "openapi", "billing.yaml"), "openapi: 3.0.0\n");
+
+  const mapped = run(root, ["contracts", "map", "--write"]);
+  const graph = JSON.parse(readFileSync(join(root, ".taphelu", "contracts", "graphs", "service-graph.json"), "utf8"));
+  const blocked = run(root, ["contracts", "sync", "--push"]);
+
+  assert.equal(mapped.status, 0, mapped.stderr);
+  assert.ok(graph.edges.some((edge) => edge.type === "depends_on"));
+  assert.notEqual(blocked.status, 0);
+  assert.match(blocked.stderr, /remote push requires --commit/);
+});
+
+test("mcp contracts supports init, check, scan, current, deps, and legacy alias", () => {
+  const root = makePlainRepo();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@demo/billing-api" }, null, 2));
+  writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: Billing\n  version: 1.0.0\npaths: {}\n");
+
+  const init = callTapheluTool("dl_contracts", { cwd: root, action: "init", write: true });
+  const scan = callTapheluTool("dl_contracts", { cwd: root, action: "scan", mode: "quick", write: true });
+  const check = callTapheluTool("taphelu_contracts", { cwd: root, action: "check" });
+  const strict = callTapheluTool("dl_contracts", { cwd: root, action: "check", strict: true });
+  const registryPath = join(root, ".taphelu", "contracts", "registry.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  registry.services.push({
+    id: "ledger-worker",
+    name: "Ledger Worker",
+    repo: "",
+    root: ".",
+    runtime: { language: "node" },
+    contracts: [],
+    provides: [{
+      id: "ledger-worker.provides.queue.ledger-export",
+      kind: "queue",
+      protocol: "sqs",
+      name: "ledger-export",
+      direction: "provides",
+      owner_service: "ledger-worker",
+      provider_service: "ledger-worker",
+      consumer_services: ["demo-billing-api"],
+      confidence: "high",
+      evidence: ["services/ledger-worker.yaml"],
+    }],
+    consumes: [],
+    depends_on: [],
+  });
+  registry.services[0].consumes = [{
+    id: "demo-billing-api.consumes.queue.ledger-export",
+    kind: "queue",
+    protocol: "sqs",
+    name: "ledger-export",
+    direction: "consumes",
+    owner_service: "demo-billing-api",
+    provider_service: "ledger-worker",
+    consumer_services: [],
+    confidence: "high",
+    evidence: ["services/demo-billing-api.yaml"],
+  }];
+  registry.services[0].depends_on = ["ledger-worker"];
+  registry.interactions = [...registry.services[0].consumes, ...registry.services[1].provides];
+  writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  const current = callTapheluTool("dl_contracts", { cwd: root, action: "current" });
+  const deps = callTapheluTool("dl_contracts", { cwd: root, action: "deps", service: "demo-billing-api", direction: "all" });
+
+  assert.equal(init.wrote, true);
+  assert.equal(scan.action, "scan");
+  assert.equal(scan.report.service.id, "demo-billing-api");
+  assert.equal(check.report.status, "PASS");
+  assert.equal(strict.report.status, "PASS");
+  assert.equal(current.report.service.id, "demo-billing-api");
+  assert.ok(deps.report.deps.outbound.some((item) => item.service === "ledger-worker"));
 });
 
 test("scan interview does not write unsafe answer content", () => {

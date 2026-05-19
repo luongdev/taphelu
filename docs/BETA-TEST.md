@@ -2,16 +2,16 @@
 
 Use this guide to test `@luongdev/taphelu` in a real repository.
 
-Current npm test build:
+Current registry release:
 
 ```bash
-@luongdev/taphelu@0.1.0-build.2
+@luongdev/taphelu@0.1.0
 ```
 
 ## Prerequisites
 
 - Node.js `>=22.16.0`
-- npm
+- pnpm
 - A separate test repository
 - Optional: Codex, Claude, Gemini, or Kiro runtime config access
 
@@ -19,22 +19,22 @@ Check local versions:
 
 ```bash
 node -v
-npm -v
+pnpm -v
 ```
 
 ## Install
 
-Install the latest published test build:
+Install the latest published release:
 
 ```bash
-npm install -g @luongdev/taphelu@0.1.0-build.2
+pnpm add -g @luongdev/taphelu@0.1.0
 dl commands
 ```
 
-If `dl` is not found, check the npm global bin path:
+If `dl` is not found, check the pnpm global bin path:
 
 ```bash
-npm prefix -g
+pnpm bin -g
 command -v dl
 ```
 
@@ -122,7 +122,7 @@ Only use `--write` in a repo where `.projects/` is allowed to be created locally
 Uninstall the package:
 
 ```bash
-npm uninstall -g @luongdev/taphelu
+pnpm remove -g @luongdev/taphelu
 ```
 
 Project-local Taphelu context, if written, lives under `.projects/`.
@@ -139,7 +139,7 @@ Generated runtime adapters live under the runtime config directory:
 ```text
 OS:
 Node version:
-npm version:
+pnpm version:
 Taphelu version:
 AI runtime tested: Codex / Claude / Gemini / Kiro / manual CLI
 Repo type: small app / monorepo / microservice / library / unknown
@@ -163,7 +163,7 @@ Why:
 Useful command for version evidence:
 
 ```bash
-npm view @luongdev/taphelu version
+pnpm view @luongdev/taphelu version
 dl commands | head -20
 ```
 

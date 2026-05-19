@@ -20,6 +20,7 @@ Primary tools:
 - `dl_context_store`
 - `dl_review_status`
 - `dl_scan_project`
+- `dl_contracts`
 - `dl_memory_search`
 - `dl_conversation_search`
 - `dl_memory_promote`
@@ -54,6 +55,27 @@ Use its `action` field for onboarding flow:
 - `interview` for targeted domain/business questions after scan evidence.
 - `plan` for bounded deep-scan work packets before broad source analysis.
 - `map` for service topology and API contract mapping. Use `focus=services|contracts|topology|all`.
+
+`dl_contracts` manages the shared polyrepo service interaction registry. It is an umbrella tool, not separate narrow tools. It covers APIs, event streams, queues, topics, pub/sub, Redis channels/streams, and compact service metadata.
+
+Actions:
+
+- `init`: preview or create `.taphelu/contracts` layout; with `remote`, `write=true` may add a git submodule.
+- `link`: record an existing registry pointer in `.projects/CONTRACTS.md`.
+- `scan`: import current service evidence into the shared registry. Use `path` for service repo path and `contracts_path` for registry path.
+- `map`: refresh cross-repo service graph artifacts from `registry.json`.
+- `check`: validate metadata, stale/missing contract paths, and registry-vs-service conflicts.
+- `current`: identify the current service from the registry and repo evidence.
+- `deps`: return outbound dependencies and inbound dependents for one service.
+- `sync`: preview, commit, or push registry git changes. `commit=true` and `push=true` are explicit gates.
+
+For polyrepo planning, agents should call:
+
+1. `dl_contracts` with `action=check`, `strict=true`.
+2. `dl_contracts` with `action=current`.
+3. `dl_contracts` with `action=deps`, `direction=all`.
+
+If strict check fails, stop and ask for contract/interaction conflict resolution. If it passes, registry facts win over implementation guessing.
 
 ## Runtime Install
 

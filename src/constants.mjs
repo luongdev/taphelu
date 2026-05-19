@@ -26,6 +26,11 @@ export const EVENT_TYPES = {
   DOMAIN_CONTEXT_RECORDED: "domain_context_recorded",
   SCAN_PLAN_CREATED: "scan_plan_created",
   SERVICE_TOPOLOGY_MAPPED: "service_topology_mapped",
+  CONTRACTS_INITIALIZED: "contracts_initialized",
+  CONTRACTS_LINKED: "contracts_linked",
+  CONTRACTS_SCANNED: "contracts_scanned",
+  CONTRACTS_MAPPED: "contracts_mapped",
+  CONTRACTS_SYNCED: "contracts_synced",
 };
 
 export const MEMORY_CATEGORIES = {

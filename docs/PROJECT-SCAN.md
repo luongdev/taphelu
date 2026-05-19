@@ -110,3 +110,87 @@ With `--write`, Taphelu refreshes the full topology bundle:
 - `.projects/graphs/service-graph.mmd`
 
 The mapper detects package/workspace roots, Docker Compose, Kubernetes/Helm, Terraform/CI signals, OpenAPI, GraphQL, protobuf/gRPC, AsyncAPI, route/controller files, and API docs. Low-confidence edges are marked as inferred.
+
+## Polyrepo Service Interaction Registry
+
+Use `dl scan map` for one repo. Use `dl contracts` when service communication spans many repos and needs one shared source of truth. In this context, "contracts" means service communication contracts: APIs, event streams, queues, topics, pub/sub, Redis channels/streams, and service metadata.
+
+Default registry path:
+
+```text
+.taphelu/contracts/
+  registry.json
+  services/
+  interactions/
+  proto/
+  openapi/
+  asyncapi/
+  graphql/
+  schemas/
+  channels/
+    kafka/
+    redis-pubsub/
+    redis-stream/
+    queues/
+    topics/
+  graphs/
+```
+
+Initialize or link a shared registry:
+
+```bash
+dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git
+dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
+dl contracts link --path .taphelu/contracts --write
+```
+
+Preview-first service import:
+
+```bash
+dl contracts scan --path . --mode standard
+dl contracts scan --path . --mode standard --write
+```
+
+The scan imports compact service metadata, API/spec files, and communication surfaces. High-confidence sources are explicit metadata and AsyncAPI. Medium-confidence sources are package/config signals such as KafkaJS, sarama, confluent clients, amqplib, ioredis, Redis clients, BullMQ, Celery, SQS, and SNS. Low-confidence constants or env names are labeled inferred and must not become source of truth without review.
+
+Build cross-repo topology:
+
+```bash
+dl contracts map
+dl contracts map --write
+dl contracts check
+dl contracts check --strict
+```
+
+`dl contracts check` blocks on stale/missing contract paths and registry-vs-service conflicts. `--strict` fails unknown `depends_on`, unknown consumed providers, and unknown consumer services. Without `--strict`, these remain warnings and unresolved graph nodes.
+
+For polyrepo planning, agents should run:
+
+```bash
+dl contracts check --strict
+dl contracts current --path .
+dl contracts deps --direction all
+```
+
+The planning context should include current service id, outbound dependencies, inbound dependents, API contracts, topics, queues, channels, streams, and unresolved or inferred interactions. If the registry check passes, the registry wins over implementation guessing. If it fails, stop and ask for resolution.
+
+Current service and dependency slice:
+
+```bash
+dl contracts current --path .
+dl contracts deps --service billing-api --direction outbound
+dl contracts deps --service billing-api --direction inbound
+dl contracts deps --service billing-api --direction all
+```
+
+The registry stores `services/<service-id>.yaml` for service metadata and `interactions/<service-id>.yaml` for the service's `provides` and `consumes` surfaces. `depends_on` is retained for readability, but Taphelu also derives it from consumed interactions when the provider service is known.
+
+Git operations are gated:
+
+```bash
+dl contracts sync
+dl contracts sync --commit
+dl contracts sync --commit --push
+```
+
+`sync` previews by default. It never commits without `--commit` and never pushes without `--push`.

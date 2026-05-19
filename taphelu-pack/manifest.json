@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "taphelu-agent-pack",
-  "version": "0.1.0-build.2",
+  "version": "0.1.0",
   "managedMarker": "TAPHELU-GENERATED",
   "mcp": "mcp.json",
   "profiles": {
@@ -12,6 +12,7 @@
     { "name": "dl-init", "path": "commands/dl-init.md", "summary": "Start Taphelu lifecycle and bootstrap existing project context." },
     { "name": "dl-resume", "path": "commands/dl-resume.md", "summary": "Resume from compact Taphelu context and relevant memory." },
     { "name": "dl-scan", "path": "commands/dl-scan.md", "summary": "Scan or import an existing project before planning." },
+    { "name": "dl-contracts", "path": "commands/dl-contracts.md", "summary": "Check or update the shared polyrepo contract registry." },
     { "name": "dl-plan", "path": "commands/dl-plan.md", "summary": "Create parallel task contracts and route QA testability review." },
     { "name": "dl-close", "path": "commands/dl-close.md", "summary": "Verify, close, and recommend context compaction." },
     { "name": "dl-status", "path": "commands/dl-status.md", "summary": "Show compact Taphelu runtime status." }
@@ -41,7 +42,7 @@
     { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md", "requiredSkills": ["taphelu-browser", "taphelu-verify"], "mcpTools": ["dl_context", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
     { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md", "requiredSkills": ["taphelu-memory"], "mcpTools": ["dl_observe", "dl_memory_promote", "dl_memory_search"], "canDelegate": false, "closeoutGate": false },
     { "name": "taphelu-context-curator", "path": "agents/taphelu-context-curator.md", "requiredSkills": ["taphelu-context"], "mcpTools": ["dl_context_store", "dl_cleanup_context"], "canDelegate": false, "closeoutGate": false },
-    { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md", "requiredSkills": ["taphelu-adapters", "taphelu-workflow"], "mcpTools": ["dl_scan_project", "dl_context_store"], "canDelegate": false, "closeoutGate": false }
+    { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md", "requiredSkills": ["taphelu-adapters", "taphelu-workflow"], "mcpTools": ["dl_scan_project", "dl_contracts", "dl_context_store"], "canDelegate": false, "closeoutGate": false }
   ],
   "runtimes": {
     "codex": {
