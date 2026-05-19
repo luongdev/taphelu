@@ -77,12 +77,12 @@ Restart Claude Code after changing user-scope MCP config if it was already runni
 If Claude stays `connecting...`, run `dl doctor --runtime claude --scope global --live`. It checks stale MCP paths, non-absolute `node` commands, local config shadowing, and a live MCP handshake.
 Claude MCP config is separate from Claude settings: MCP entries use `.mcp.json` or `~/.claude.json`; hooks and `statusLine` use Claude `settings.json`.
 
-Kiro can also register the MCP server through its CLI:
+Kiro can also register the MCP server through `kiro-cli`:
 
 ```bash
 NODE_BIN="$(command -v node)"
 MCP_BIN="$(npm root -g)/@luongdev/taphelu/bin/taphelu-mcp.mjs"
-kiro --add-mcp '{"name":"taphelu","command":"'"$NODE_BIN"'","args":["'"$MCP_BIN"'"],"env":{"TAPHELU_MANAGED":"1"}}'
+kiro-cli mcp add --scope global --name taphelu --command "$NODE_BIN" --args "$MCP_BIN" --env TAPHELU_MANAGED=1 --force
 ```
 
 For tests or custom config roots:
@@ -97,7 +97,7 @@ Generated runtime paths under a custom config dir:
 - `--runtime codex`: `config.toml`, `skills/`, `commands/`, `AGENTS.md`, and `/dl-status` fallback metadata.
 - `--runtime claude`: `.mcp.json`, `skills/`, `agents/`, `commands/`, `hooks/`, and `settings.json` with hooks/statusLine.
 - `--runtime gemini`: `settings.json`, `skills/`, and `extensions/taphelu/` with `gemini-extension.json`, commands, context, and footer settings for model/context display.
-- `--runtime kiro`: `settings/mcp.json`, `skills/`, `agents`, hooks, native-TUI status metadata, and skill-based `/dl-*` commands.
+- `--runtime kiro`: `settings/mcp.json`, `skills/`, CLI `agents/*.json` with hooks, IDE `.kiro.hook` files, native-TUI status metadata, and skill-based `/dl-*` commands.
 - `--runtime all`: `/tmp/taphelu-runtime/claude`, `/tmp/taphelu-runtime/kiro`, `/tmp/taphelu-runtime/codex`, and `/tmp/taphelu-runtime/gemini`
 
 `dl doctor` validates managed markers, hooks/status files or fallback metadata, local/global shadowing, and the generated MCP command/path. It reports `FAIL` when a stale config points to a missing `taphelu-mcp.mjs` or uses non-absolute `node`.

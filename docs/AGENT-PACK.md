@@ -61,10 +61,10 @@ Runtime status surfaces are capability-based:
 
 - Claude: native `statusLine` command script, including model, effort, context percentage, Taphelu phase/status, memory/index counts, and git dirty state.
 - Gemini: native CLI footer is configured to keep model info and context percentage visible; Taphelu-specific state remains available through `/dl-status`.
-- Kiro: native TUI status/progress remains runtime-owned; Taphelu-specific state is exposed through `/dl-status` and generated agent/skill context.
+- Kiro: native TUI status/progress remains runtime-owned; Taphelu-specific state is exposed through `/dl-status`, generated CLI agent JSON, IDE `.kiro.hook` files, and generated skill context.
 - Codex: no verified custom statusline config surface in the installed CLI; Taphelu installs `/dl-status`, MCP, skills, and compact `AGENTS.md` pointer only.
 
-Kiro uses skill-based slash commands and generated agents. Gemini gets an extension under `extensions/taphelu` plus generated commands. Codex gets skills, MCP config, and compact instruction/status fallback files.
+Kiro uses skill-based slash commands, generated CLI agents, and IDE hook files. Gemini gets an extension under `extensions/taphelu` plus generated commands. Codex gets skills, MCP config, and compact instruction/status fallback files.
 
 Hooks are generated from one canonical script and must summarize only meaningful events. They must not write raw logs, browser content, source dumps, PII, or secrets into always-loaded context.
 

@@ -76,6 +76,8 @@ dl runtime status --runtime all --scope local
 
 `full-auto` install generates MCP config, skills, agents or role-as-skill fallbacks, `/dl-*` commands, hooks, and runtime-appropriate status integration. Claude uses native `statusLine`; Gemini uses native footer model/context settings; Kiro keeps native TUI status with `/dl-status` for Taphelu state; Codex uses `/dl-status` fallback. Claude should be hardened first; Kiro, Codex, and Gemini follow with their supported surfaces.
 
+Kiro has two hook surfaces. `dl install --runtime kiro` generates CLI agent JSON files with embedded hooks for `kiro-cli`, and IDE `.kiro.hook` files so the Kiro Agent Hooks panel can discover Taphelu hooks.
+
 ## Direct Client Commands
 
 Codex:
@@ -99,5 +101,5 @@ gemini mcp add taphelu node /path/to/taphelu/bin/taphelu-mcp.mjs
 Kiro:
 
 ```bash
-kiro --add-mcp '{"name":"taphelu","command":"node","args":["/path/to/taphelu/bin/taphelu-mcp.mjs"],"env":{"TAPHELU_MANAGED":"1"}}'
+kiro-cli mcp add --scope global --name taphelu --command /absolute/path/to/node --args /path/to/taphelu/bin/taphelu-mcp.mjs --env TAPHELU_MANAGED=1 --force
 ```

@@ -148,10 +148,16 @@ export function inspectInstall(root, input = {}) {
       if (file.kind === "hook" || file.kind === "statusline") {
         return inspectScriptArtifact(file, content);
       }
-      if (["skill", "agent", "command", "instruction", "extension-context"].includes(file.kind)) {
-        return content.includes(file.marker)
-          ? { path: file.path, status: "PASS", message: "Managed adapter file present." }
-          : { path: file.path, status: "FAIL", message: "File exists but lacks Taphelu managed marker." };
+    if (file.kind === "agent-json") {
+      return inspectKiroAgentJson(file, content);
+    }
+    if (file.kind === "kiro-ide-hook") {
+      return inspectKiroIdeHook(file, content);
+    }
+    if (["skill", "agent", "command", "instruction", "extension-context"].includes(file.kind)) {
+      return content.includes(file.marker)
+        ? { path: file.path, status: "PASS", message: "Managed adapter file present." }
+        : { path: file.path, status: "FAIL", message: "File exists but lacks Taphelu managed marker." };
     }
     if (file.kind === "settings-json") {
       return inspectSettingsJson(file, content);
@@ -200,7 +206,26 @@ function buildRuntimeInstallPlan(root, pack, input) {
       });
     }
 
-    if (runtimeConfig.nativeAgents) {
+    if (input.runtime === "kiro") {
+      const hook = pack.hooks[0];
+      const hookPath = join(targetRoot.hooksRoot, `${hook.name}.mjs`);
+      for (const agent of selected.agents) {
+        addManagedFile(files, blockers, {
+          path: join(targetRoot.agentsRoot, `${agent.name}.json`),
+          content: renderKiroAgent(agent, pack.manifest.managedMarker, input, hookPath),
+          marker: pack.manifest.managedMarker,
+          kind: "agent-json",
+          runtime: input.runtime,
+          hooks: input.hooks,
+        });
+        addManagedRemoval(files, blockers, {
+          path: join(targetRoot.agentsRoot, `${agent.name}.md`),
+          marker: pack.manifest.managedMarker,
+          kind: "remove",
+          runtime: input.runtime,
+        });
+      }
+    } else if (runtimeConfig.nativeAgents) {
       for (const agent of selected.agents) {
         addManagedFile(files, blockers, {
           path: join(targetRoot.agentsRoot, `${agent.name}.md`),
@@ -269,7 +294,7 @@ function buildRuntimeInstallPlan(root, pack, input) {
       manualActions.push(`Claude global MCP can also be installed with: claude mcp add -e ${JSON_MANAGED_ENV}=1 --transport stdio --scope user taphelu -- ${input.nodeCommand} ${MCP_BIN}`);
     }
     if (input.runtime === "kiro" && input.scope === "global") {
-      manualActions.push(`Kiro global MCP can also be installed with: kiro --add-mcp '${JSON.stringify({ name: "taphelu", command: input.nodeCommand, args: [MCP_BIN], env: { [JSON_MANAGED_ENV]: "1" } })}'`);
+      manualActions.push(`Kiro global MCP can also be installed with: kiro-cli mcp add --scope global --name taphelu --command ${shellQuote(input.nodeCommand)} --args ${shellQuote(MCP_BIN)} --env ${JSON_MANAGED_ENV}=1 --force`);
     }
   }
 
@@ -306,6 +331,31 @@ function buildRuntimeInstallPlan(root, pack, input) {
         kind: "hook",
         runtime: input.runtime,
       });
+      if (input.runtime === "kiro") {
+        for (const hookFile of renderKiroIdeHooks({
+          marker: pack.manifest.managedMarker,
+          nodeCommand: input.nodeCommand,
+          hookPath: join(targetRoot.hooksRoot, `${hook.name}.mjs`),
+          policy: input.hooks,
+        })) {
+          addManagedFile(files, blockers, {
+            path: join(targetRoot.hooksRoot, hookFile.name),
+            content: hookFile.content,
+            marker: pack.manifest.managedMarker,
+            kind: "kiro-ide-hook",
+            runtime: input.runtime,
+          });
+        }
+      }
+    } else if (input.runtime === "kiro") {
+      for (const name of kiroIdeHookNames()) {
+        addManagedRemoval(files, blockers, {
+          path: join(targetRoot.hooksRoot, name),
+          marker: pack.manifest.managedMarker,
+          kind: "remove",
+          runtime: input.runtime,
+        });
+      }
     }
     const statuslinePath = join(targetRoot.hooksRoot, `${pack.statusline.name}.mjs`);
     if (input.statusline === "on" && statuslineCapability.script) {
@@ -420,6 +470,31 @@ function renderAgent(item, marker, runtime) {
     ? { skills: item.requiredSkills }
     : {};
   return renderMarkdownWithFrontmatter(item, marker, runtime, item.name, item.description, extra);
+}
+
+function renderKiroAgent(item, marker, input, hookPath) {
+  const prompt = [
+    `<!-- ${marker}: do not edit. Source: taphelu-pack/${item.path}. Regenerate with dl install. -->`,
+    item.body.trim(),
+    "",
+    "## Taphelu Runtime Adapter",
+    "Use generated Taphelu skills and `/dl-*` entrypoints. Use Taphelu MCP tools when visible.",
+  ].join("\n");
+  const agent = {
+    name: item.name,
+    description: item.description,
+    prompt,
+    tools: ["*"],
+    toolAliases: {},
+    allowedTools: [],
+    resources: ["skill://../skills/**/SKILL.md"],
+    hooks: input.hooks === "off" ? {} : kiroCliHooks(input, hookPath),
+    toolsSettings: {},
+    includeMcpJson: true,
+    model: null,
+    welcomeMessage: `Taphelu ${item.name} loaded. Start with /dl-status or /dl-init.`,
+  };
+  return `${JSON.stringify(agent, null, 2)}\n`;
 }
 
 function renderAgentAsSkill(item, marker, runtime) {
@@ -802,7 +877,7 @@ function mergeRuntimeSettings(existing, spec) {
     hooks: spec.hooks === "off" ? "off" : {
       policy: spec.hooks,
       command: spec.nodeCommand,
-      args: [spec.hookPath, "--policy", spec.hooks],
+      args: [spec.hookPath, "--policy", spec.hooks, "--runtime", spec.runtime],
     },
     statusline,
   };
@@ -833,7 +908,7 @@ function mergeClaudeHooks(existingHooks, spec) {
   const hookCommand = {
     type: "command",
     command: spec.nodeCommand,
-    args: [spec.hookPath, "--policy", spec.hooks],
+    args: [spec.hookPath, "--policy", spec.hooks, "--runtime", "claude"],
   };
   const events = [
     ["SessionStart", "startup|resume"],
@@ -854,6 +929,80 @@ function mergeClaudeHooks(existingHooks, spec) {
     next[event] = current;
   }
   return next;
+}
+
+function kiroCliHooks(input, hookPath) {
+  const command = `${shellQuote(input.nodeCommand)} ${shellQuote(hookPath)} --policy ${shellQuote(input.hooks)} --runtime kiro`;
+  return {
+    agentSpawn: [{ command }],
+    userPromptSubmit: [{ command }],
+    preToolUse: [
+      { matcher: "execute_bash", command },
+      { matcher: "fs_write", command },
+      { matcher: "@taphelu", command },
+    ],
+    postToolUse: [
+      { matcher: "execute_bash", command },
+      { matcher: "fs_write", command },
+      { matcher: "@taphelu", command },
+    ],
+    stop: [{ command }],
+  };
+}
+
+function renderKiroIdeHooks({ marker, nodeCommand, hookPath, policy }) {
+  const baseCommand = `${shellQuote(nodeCommand)} ${shellQuote(hookPath)} --policy ${shellQuote(policy)} --runtime kiro`;
+  const hookSpecs = [
+    {
+      file: "taphelu-prompt-context.kiro.hook",
+      name: "Taphelu prompt context",
+      description: "Inject compact Taphelu context and lifecycle guidance when a prompt is submitted.",
+      when: { type: "promptSubmit" },
+      then: { type: "shellCommand", command: `${baseCommand} --event promptSubmit` },
+    },
+    {
+      file: "taphelu-pre-tool-guard.kiro.hook",
+      name: "Taphelu pre-tool guard",
+      description: "Block destructive shell/write actions and unsafe Taphelu memory promotion before tools run.",
+      when: { type: "preToolUse", tools: ["shell", "write", "@mcp"] },
+      then: { type: "shellCommand", command: `${baseCommand} --event preToolUse` },
+    },
+    {
+      file: "taphelu-post-tool-observe.kiro.hook",
+      name: "Taphelu post-tool observe",
+      description: "Record compact observations after meaningful shell/write/MCP tool usage.",
+      when: { type: "postToolUse", tools: ["shell", "write", "@mcp"] },
+      then: { type: "shellCommand", command: `${baseCommand} --event postToolUse` },
+    },
+    {
+      file: "taphelu-agent-stop.kiro.hook",
+      name: "Taphelu agent stop",
+      description: "Record turn completion and remind the agent to close through Taphelu verification gates.",
+      when: { type: "agentStop" },
+      then: { type: "shellCommand", command: `${baseCommand} --event agentStop` },
+    },
+  ];
+  return hookSpecs.map((spec) => ({
+    name: spec.file,
+    content: `${JSON.stringify({
+      enabled: true,
+      name: spec.name,
+      description: spec.description,
+      version: "1",
+      when: spec.when,
+      then: spec.then,
+      tapheluManaged: marker,
+    }, null, 2)}\n`,
+  }));
+}
+
+function kiroIdeHookNames() {
+  return [
+    "taphelu-prompt-context.kiro.hook",
+    "taphelu-pre-tool-guard.kiro.hook",
+    "taphelu-post-tool-observe.kiro.hook",
+    "taphelu-agent-stop.kiro.hook",
+  ];
 }
 
 function stripTapheluClaudeHooks(existingHooks) {
@@ -974,6 +1123,36 @@ function inspectScriptArtifact(file, content) {
     return { path: file.path, status: "FAIL", message: `Generated script syntax check failed: ${String(result.stderr || result.stdout || "").trim()}` };
   }
   return { path: file.path, status: "PASS", message: "Managed adapter script present and syntax-valid." };
+}
+
+function inspectKiroAgentJson(file, content) {
+  const parsed = safeJson(content);
+  if (!parsed) return { path: file.path, status: "FAIL", message: "Kiro agent JSON is invalid." };
+  if (!String(parsed.prompt || "").includes(file.marker)) {
+    return { path: file.path, status: "FAIL", message: "Kiro agent prompt lacks Taphelu managed marker." };
+  }
+  if (parsed.includeMcpJson !== true) {
+    return { path: file.path, status: "FAIL", message: "Kiro agent must include MCP JSON." };
+  }
+  if (!Array.isArray(parsed.tools) || !parsed.tools.includes("*")) {
+    return { path: file.path, status: "FAIL", message: "Kiro agent must declare tools so it can use skills and MCP." };
+  }
+  if (file.runtime === "kiro" && file.hooks !== "off" && (!parsed.hooks || !Object.keys(parsed.hooks).length)) {
+    return { path: file.path, status: "FAIL", message: "Kiro CLI agent hooks are missing." };
+  }
+  return { path: file.path, status: "PASS", message: "Kiro CLI agent config includes MCP, tools, and hooks." };
+}
+
+function inspectKiroIdeHook(file, content) {
+  const parsed = safeJson(content);
+  if (!parsed) return { path: file.path, status: "FAIL", message: "Kiro IDE hook JSON is invalid." };
+  if (parsed.tapheluManaged !== file.marker) {
+    return { path: file.path, status: "FAIL", message: "Kiro IDE hook lacks Taphelu managed marker." };
+  }
+  if (parsed.enabled !== true || !parsed.when?.type || parsed.then?.type !== "shellCommand") {
+    return { path: file.path, status: "FAIL", message: "Kiro IDE hook must be enabled shellCommand hook." };
+  }
+  return { path: file.path, status: "PASS", message: "Kiro IDE hook is present." };
 }
 
 function inspectExtensionJson(file, content) {

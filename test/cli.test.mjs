@@ -587,7 +587,7 @@ test("install write creates local runtime adapters and doctor passes", () => {
   const codexSkill = readFileSync(join(root, ".codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
   const claudeAgent = readFileSync(join(root, ".claude", "agents", "taphelu-lead.md"), "utf8");
   const geminiAgentSkill = readFileSync(join(root, ".gemini", "skills", "taphelu-lead", "SKILL.md"), "utf8");
-  const kiroAgent = readFileSync(join(root, ".kiro", "agents", "taphelu-lead.md"), "utf8");
+  const kiroAgent = JSON.parse(readFileSync(join(root, ".kiro", "agents", "taphelu-lead.json"), "utf8"));
   const claudeMcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
   const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8"));
   const claudeCommand = readFileSync(join(root, ".claude", "commands", "dl-init.md"), "utf8");
@@ -606,6 +606,7 @@ test("install write creates local runtime adapters and doctor passes", () => {
   const kiroMcp = JSON.parse(readFileSync(join(root, ".kiro", "settings", "mcp.json"), "utf8"));
   const kiroRuntimeSettings = JSON.parse(readFileSync(join(root, ".kiro", "settings", "taphelu.json"), "utf8"));
   const kiroCommandSkill = readFileSync(join(root, ".kiro", "skills", "dl-init", "SKILL.md"), "utf8");
+  const kiroIdeHook = JSON.parse(readFileSync(join(root, ".kiro", "hooks", "taphelu-prompt-context.kiro.hook"), "utf8"));
   const codexToml = readFileSync(join(root, ".codex", "config.toml"), "utf8");
   const claudeHookCheck = spawnSync(process.execPath, ["--check", claudeHookPath], { encoding: "utf8" });
   const claudeStatuslineCheck = spawnSync(process.execPath, ["--check", claudeStatuslinePath], { encoding: "utf8" });
@@ -638,9 +639,17 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.equal(geminiRuntimeSettings.taphelu.statusline.mode, "native-footer");
   assert.equal(existsSync(join(root, ".gemini", "hooks", "taphelu-statusline.mjs")), false);
   assert.match(geminiCommand, /prompt =/);
-  assert.match(kiroAgent, /taphelu-lead/);
+  assert.equal(kiroAgent.name, "taphelu-lead");
+  assert.match(kiroAgent.prompt, /taphelu-lead/);
+  assert.equal(kiroAgent.includeMcpJson, true);
+  assert.deepEqual(kiroAgent.tools, ["*"]);
+  assert.equal(kiroAgent.hooks.userPromptSubmit[0].command.includes("--runtime kiro"), true);
+  assert.equal(kiroAgent.hooks.preToolUse.some((hook) => hook.matcher === "execute_bash"), true);
   assert.equal(kiroRuntimeSettings.taphelu.statusline.mode, "native-tui");
   assert.equal(existsSync(join(root, ".kiro", "hooks", "taphelu-statusline.mjs")), false);
+  assert.equal(kiroIdeHook.enabled, true);
+  assert.equal(kiroIdeHook.when.type, "promptSubmit");
+  assert.equal(kiroIdeHook.then.type, "shellCommand");
   assert.match(kiroCommandSkill, /Invoke with \/dl-init/);
   assert.match(codexToml, /\[mcp_servers\.taphelu\]/);
   assert.equal(claudeHookCheck.status, 0, claudeHookCheck.stderr);
@@ -882,7 +891,7 @@ test("global install all separates runtimes under shared config dir", () => {
   const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", configDir]);
   const codexSkill = readFileSync(join(configDir, "codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
   const geminiSkill = readFileSync(join(configDir, "gemini", "skills", "taphelu-core", "SKILL.md"), "utf8");
-  const kiroAgent = readFileSync(join(configDir, "kiro", "agents", "taphelu-lead.md"), "utf8");
+  const kiroAgent = JSON.parse(readFileSync(join(configDir, "kiro", "agents", "taphelu-lead.json"), "utf8"));
 
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
@@ -893,7 +902,8 @@ test("global install all separates runtimes under shared config dir", () => {
   assert.equal(existsSync(join(configDir, "kiro", "settings", "mcp.json")), true);
   assert.match(codexSkill, /taphelu_runtime: "codex"/);
   assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
-  assert.match(kiroAgent, /taphelu_runtime: "kiro"/);
+  assert.match(kiroAgent.prompt, /TAPHELU-GENERATED/);
+  assert.equal(kiroAgent.includeMcpJson, true);
 });
 
 test("doctor reports stale managed MCP server paths", () => {

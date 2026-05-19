@@ -6,7 +6,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 
 const input = readJsonStdin();
-const event = input.hook_event_name || input.hookEventName || input.event || "";
+const runtime = flagValue("--runtime") || input.runtime || "runtime";
+const event = input.hook_event_name || input.hookEventName || input.event || flagValue("--event") || "";
 const toolName = String(input.tool_name || input.toolName || "");
 const toolInput = input.tool_input || input.toolInput || {};
 const cwd = input.cwd || process.cwd();
@@ -93,14 +94,14 @@ function observationFromHook(payloadInput, normalizedEvent, tool) {
     return {
       role: "user",
       source: "user_prompt",
-      content: sanitizeL0Content(String(payloadInput.prompt || payloadInput.user_prompt || payloadInput.message || "")).content,
+      content: sanitizeL0Content(String(payloadInput.prompt || payloadInput.user_prompt || payloadInput.message || process.env.USER_PROMPT || "")).content,
     };
   }
   if (normalizedEvent === "sessionstart" || normalizedEvent === "agentspawn") {
     return {
       role: "system",
       source: "runtime_hook",
-      content: `Claude hook observed ${normalizedEvent}.`,
+      content: `${runtime} hook observed ${normalizedEvent}.`,
     };
   }
   if (normalizedEvent === "posttooluse") {
@@ -110,11 +111,11 @@ function observationFromHook(payloadInput, normalizedEvent, tool) {
       content: summarizeToolResult(tool, payloadInput.tool_response || payloadInput.toolResponse || payloadInput.tool_output || payloadInput.toolOutput),
     };
   }
-  if (normalizedEvent === "stop" || normalizedEvent === "subagentstop") {
+  if (normalizedEvent === "stop" || normalizedEvent === "subagentstop" || normalizedEvent === "agentstop") {
     return {
       role: "system",
       source: "runtime_hook",
-      content: `Claude hook observed ${normalizedEvent}.`,
+      content: `${runtime} hook observed ${normalizedEvent}.`,
     };
   }
   return { role: "", source: "", content: "" };
