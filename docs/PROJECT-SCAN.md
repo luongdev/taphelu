@@ -80,6 +80,12 @@ dl scan interview \
 
 With `--write`, Taphelu writes `.projects/DOMAIN.md` and appends `domain_context_recorded`. This flag-heavy form is for scripts and tests, not the normal human UX.
 
+## Automatic Batch Scan Plan
+
+`dl scan` must stay bounded. If the repo is large, multi-package, or the scan is truncated by mode limits, the scan report includes `## Auto Batch Scan Plan` with per-batch task packets and parallel groups.
+
+With `--write`, Taphelu writes `.projects/CODEBASE.md` and also `.projects/SCAN-PLAN.md` for the generated batch plan. Agents should execute those packets by parallel group and merge compact summaries instead of reading the whole repo in one pass.
+
 ## Deep Scan Plan
 
 Create bounded work packets before broad analysis:

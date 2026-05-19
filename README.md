@@ -194,6 +194,8 @@ dl scan plan --path . --mode standard
 dl scan map --path . --mode standard
 ```
 
+For large repos, `dl scan` automatically emits an `Auto Batch Scan Plan`; with `--write`, it writes `.projects/SCAN-PLAN.md` so agents can scan bounded batches instead of reading the whole repo.
+
 Write project context only after preview:
 
 ```bash

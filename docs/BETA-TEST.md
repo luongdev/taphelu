@@ -5,7 +5,7 @@ Use this guide to test `@luongdev/taphelu` in a real repository.
 Current registry release:
 
 ```bash
-@luongdev/taphelu@0.1.2
+@luongdev/taphelu@0.1.3
 ```
 
 ## Prerequisites
@@ -27,7 +27,7 @@ pnpm -v
 Install the latest published release:
 
 ```bash
-pnpm add -g @luongdev/taphelu@0.1.2
+pnpm add -g @luongdev/taphelu@0.1.3
 dl commands
 ```
 

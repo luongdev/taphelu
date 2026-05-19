@@ -152,8 +152,9 @@ export function analyzeProjectScan(root, input = {}) {
   if (!packageFiles.length) openQuestions.push("No package or build manifest detected.");
   if (!testCommands.length) openQuestions.push("No obvious test command detected.");
   if (!docs.some((doc) => /(^|\/)readme\.md$/i.test(doc.relativePath))) openQuestions.push("No README.md detected in scan scope.");
+  const largeRepo = files.length > 300 || files.truncated || topLevelDirs.length > 8 || packageFiles.length > 5;
 
-  return {
+  const report = {
     mode,
     scanPath: relativeProjectPath(root, scanRoot),
     truncated: files.truncated,
@@ -170,16 +171,25 @@ export function analyzeProjectScan(root, input = {}) {
     serviceSignals,
     confidence,
     openQuestions,
-    largeRepo: files.length > 300,
-    nextRoute: openQuestions.length ? "clarify_or_plan" : "plan",
+    largeRepo,
+    batchTasks: [],
+    nextRoute: largeRepo ? "execute_scan_batches" : openQuestions.length ? "clarify_or_plan" : "plan",
   };
+  report.batchTasks = buildAutoScanBatchTasks(report);
+  return report;
 }
 
 export function applyProjectScan(root, report) {
   mkdirSync(join(root, ".projects"), { recursive: true });
   const codebase = renderCodebaseArtifact(report);
-  withProjectFilesTransaction(root, ["events.jsonl", "CODEBASE.md", "PROJECT.md", "STATE.md"], () => {
+  const projectFiles = ["events.jsonl", "CODEBASE.md", "PROJECT.md", "STATE.md"];
+  if (report.batchTasks.length) projectFiles.push("SCAN-PLAN.md");
+  withProjectFilesTransaction(root, projectFiles, () => {
     writeTextFileAtomic(join(root, ".projects", "CODEBASE.md"), codebase);
+    if (report.batchTasks.length) {
+      mkdirSync(join(root, ".projects", "scans"), { recursive: true });
+      writeTextFileAtomic(join(root, ".projects", "SCAN-PLAN.md"), renderAutoBatchScanPlan(report));
+    }
     writeTextFileAtomic(join(root, ".projects", "PROJECT.md"), updateProjectArtifact(readProjectFile(root, "PROJECT.md"), report));
     writeTextFileAtomic(join(root, ".projects", "STATE.md"), updateScanState(readProjectFile(root, "STATE.md"), report));
     appendEvent(root, {
@@ -192,6 +202,7 @@ export function applyProjectScan(root, report) {
         mode: report.mode,
         file_count: report.fileCount,
         confidence: report.confidence,
+        batch_task_count: report.batchTasks.length,
         next_route: report.nextRoute,
       },
     });
@@ -268,9 +279,11 @@ ${formatList(report.openQuestions, "None.")}
 
 ${report.largeRepo ? "- Large enough to split scan follow-up into stack, architecture, testing, and concerns focus areas." : "- Small enough for one agent to continue from this scan report."}
 
+${report.batchTasks.length ? renderAutoBatchScanPlanSection(report) : ""}
+
 ## Write Behavior
 
-${didWrite ? "- Wrote `.projects/CODEBASE.md`, updated `.projects/PROJECT.md`, updated `.projects/STATE.md`, and appended an event." : "- Add `--write` to persist scan context. Preview mode writes nothing."}
+${didWrite ? `- Wrote \`.projects/CODEBASE.md\`, updated \`.projects/PROJECT.md\`, updated \`.projects/STATE.md\`${report.batchTasks.length ? ", wrote `.projects/SCAN-PLAN.md`" : ""}, and appended an event.` : "- Add `--write` to persist scan context. Preview mode writes nothing."}
 
 ## Next Route
 
@@ -1187,8 +1200,8 @@ function renderDomainArtifact(report) {
     .replace(/\n## Write Behavior[\s\S]*?\n## Next Route\n\n`[^`]*`\n?$/u, `\n## Source Scan\n\n- Path: \`${report.scan.scanPath}\`\n- Mode: \`${report.scan.mode}\`\n- Files observed: ${report.scan.fileCount}\n`);
 }
 
-function renderScanPlanArtifact(report) {
-  const taskBlocks = report.tasks.map((task) => `### ${task.id} - ${task.focusArea}
+function renderTaskPackets(tasks) {
+  return tasks.map((task) => `### ${task.id} - ${task.focusArea}
 
 - Owner role: \`${task.ownerRole}\`
 - Boundary: ${task.boundary}
@@ -1198,11 +1211,58 @@ function renderScanPlanArtifact(report) {
 - Output artifact: \`${task.outputArtifact}\`
 - Testability/evidence class: \`${task.testability}\`
 - Parallel group: \`${task.parallelGroup}\``).join("\n\n");
+}
 
-  const groupRows = Object.entries(groupTasksByParallel(report.tasks))
-    .map(([group, tasks]) => `| ${group} | ${tasks.map((task) => `\`${task.id}\``).join(", ")} |`)
+function renderParallelGroups(tasks) {
+  return Object.entries(groupTasksByParallel(tasks))
+    .map(([group, grouped]) => `| ${group} | ${grouped.map((task) => `\`${task.id}\``).join(", ")} |`)
     .join("\n");
+}
 
+function renderAutoBatchScanPlanSection(report) {
+  return `## Auto Batch Scan Plan
+
+Repo is large or truncated. Do not broad-read source in one pass. Execute these packets by parallel group and merge summaries.
+
+${renderTaskPackets(report.batchTasks)}
+
+## Batch Parallel Groups
+
+| Group | Tasks |
+|---|---|
+${renderParallelGroups(report.batchTasks)}
+`;
+}
+
+function renderAutoBatchScanPlan(report) {
+  return `# Auto Batch Scan Plan
+
+## Scan Evidence
+
+- Path: \`${report.scanPath}\`
+- Scan mode: \`${report.mode}\`
+- Files observed: ${report.fileCount}${report.truncated ? " (truncated by mode limit)" : ""}
+- Top-level directories: ${report.topLevelDirs.length ? report.topLevelDirs.join(", ") : "none"}
+- Stack signals: ${report.stack.length ? report.stack.join(", ") : "none"}
+- Service/API signals: ${report.serviceSignals.length ? report.serviceSignals.join(", ") : "none"}
+
+## Rule
+
+Run batch packets by parallel group. Each packet writes a compact summary artifact only. Do not dump source bodies into project context.
+
+## Task Packets
+
+${renderTaskPackets(report.batchTasks)}
+
+## Parallel Groups
+
+| Group | Tasks |
+|---|---|
+${renderParallelGroups(report.batchTasks)}
+`;
+}
+
+function renderScanPlanArtifact(report) {
   return `# Deep Scan Plan
 
 ## Scan Evidence
@@ -1216,13 +1276,13 @@ function renderScanPlanArtifact(report) {
 
 ## Task Packets
 
-${taskBlocks}
+${renderTaskPackets(report.tasks)}
 
 ## Parallel Groups
 
 | Group | Tasks |
 |---|---|
-${groupRows}
+${renderParallelGroups(report.tasks)}
 `;
 }
 
@@ -1346,6 +1406,98 @@ function buildDeepScanTasks(scan, answers) {
   }
 
   return tasks;
+}
+
+function buildAutoScanBatchTasks(scan) {
+  if (!scan.largeRepo && !scan.truncated) return [];
+  const tasks = [
+    taskPacket("B1", "root-orientation", "taphelu-analyst", "root manifests, README/docs index, package/build files only", [], "Establish stack, package manager, scripts, project entrypoints, and obvious scan gaps before reading any broad source.", [
+      "package/build manifests",
+      "README/docs index",
+      "top-level directory list",
+      "test command candidates",
+    ], ".projects/scans/root-orientation.md", "artifact-check", 1),
+    taskPacket("B2", "verification", "taphelu-qa", "test config, CI files, smoke paths, test directories only", ["B1"], "Find the cheapest reliable verification commands and flag missing or risky test coverage.", [
+      "test scripts",
+      "CI config",
+      "test directories",
+      "manual smoke candidates",
+    ], ".projects/scans/verification.md", "artifact-check", 2),
+  ];
+
+  const eligibleDirs = scan.topLevelDirs
+    .filter((dir) => !["docs", "test", "tests", "spec", "specs"].includes(dir));
+  const dirs = eligibleDirs.slice(0, 12);
+  const omittedDirs = eligibleDirs.slice(12);
+  for (const dir of dirs) {
+    const id = `B${tasks.length + 1}`;
+    tasks.push(taskPacket(
+      id,
+      `dir:${dir}`,
+      ownerForScanDir(dir),
+      `${dir}/ only; summarize structure and contracts, do not dump source bodies`,
+      ["B1"],
+      `Scan \`${dir}/\` as an isolated batch and produce compact findings for merge.`,
+      [
+        "local manifests/config",
+        "entrypoints and boundary files",
+        "public interfaces or integration points",
+        "risks/open questions",
+      ],
+      `.projects/scans/${slugForPath(dir)}.md`,
+      "artifact-check",
+      2,
+    ));
+  }
+
+  if (scan.docs.length) {
+    tasks.push(taskPacket("BDOC", "docs-domain", "taphelu-analyst", "README and docs only", ["B1"], "Extract durable domain, terminology, workflows, and open questions from docs without copying raw prose.", [
+      "README",
+      "architecture/domain docs",
+      "workflow docs",
+    ], ".projects/scans/docs-domain.md", "artifact-check", 2));
+  }
+
+  if (scan.serviceSignals.length) {
+    tasks.push(taskPacket("BSVC", "services-contracts", "taphelu-architect", "service/API/messaging signals only", ["B1"], "Identify service boundaries, API specs, messaging surfaces, and whether `dl scan map` or `dl contracts check` should run next.", [
+      "OpenAPI/GraphQL/protobuf/AsyncAPI files",
+      "Docker/Kubernetes/compose files",
+      "route/controller paths",
+      "messaging config signals",
+    ], ".projects/scans/services-contracts.md", "artifact-check", 2));
+  }
+
+  if (omittedDirs.length) {
+    tasks.push(taskPacket("BREM", "remaining-directories", "taphelu-lead", `remaining top-level directories only: ${omittedDirs.join(", ")}`, ["B1"], "Decide whether remaining directories need separate scan packets or can be marked generated/low-value/off-limits.", [
+      "directory names",
+      "ignore rules",
+      "restricted area answers",
+      "reason to include or skip each remaining directory",
+    ], ".projects/scans/remaining-directories.md", "artifact-check", 2));
+  }
+
+  tasks.push(taskPacket("BMERGE", "merge", "taphelu-lead", "batch summaries only; no raw source", tasks.filter((task) => task.parallelGroup === 2).map((task) => task.id), "Merge batch summaries into CODEBASE/PROJECT/STATE updates and decide whether deeper focused scans are needed.", [
+    "batch summary artifacts",
+    "open questions",
+    "recommended next command",
+  ], ".projects/scans/merge-summary.md", "artifact-check", 3));
+
+  return tasks;
+}
+
+function ownerForScanDir(dir) {
+  if (/^(app|apps|web|frontend|ui)$/i.test(dir)) return "taphelu-ux-analyst";
+  if (/^(infra|deploy|deployment|docker|k8s|helm|terraform|ops)$/i.test(dir)) return "taphelu-architect";
+  if (/^(src|server|backend|api|services|packages|libs|lib)$/i.test(dir)) return "taphelu-architect";
+  return "taphelu-analyst";
+}
+
+function slugForPath(value) {
+  return String(value || "root")
+    .replaceAll("\\", "/")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || "root";
 }
 
 function taskPacket(id, focusArea, ownerRole, boundary, dependsOn, objective, evidenceToCollect, outputArtifact, testability, parallelGroup) {
@@ -1632,6 +1784,13 @@ ${formatList(report.docs, "No docs discovered.")}
 ## Open Questions
 
 ${formatList(report.openQuestions, "None.")}
+
+${report.batchTasks.length ? `## Auto Batch Scan
+
+- Batch task count: ${report.batchTasks.length}
+- Plan artifact: \`.projects/SCAN-PLAN.md\`
+- Next route: execute scan packets by parallel group before broad source analysis.
+` : ""}
 `;
 }
 
@@ -1649,10 +1808,14 @@ function updateProjectArtifact(markdown, report) {
 function updateScanState(markdown, report) {
   const current = markdown.trim() ? markdown : "# State\n";
   let next = replaceSection(current, "Current Goal", `Continue from existing project scan at \`${report.scanPath}\`.`);
-  next = replaceSection(next, "Current Phase", `Project scan completed with \`${report.confidence}\` confidence. Use \`.projects/CODEBASE.md\` before planning.`);
+  next = replaceSection(next, "Current Phase", report.batchTasks.length
+    ? `Project scan completed with \`${report.confidence}\` confidence and created ${report.batchTasks.length} batch packet(s). Use \`.projects/SCAN-PLAN.md\` before broad source analysis.`
+    : `Project scan completed with \`${report.confidence}\` confidence. Use \`.projects/CODEBASE.md\` before planning.`);
   next = replaceSection(next, "Blockers", report.openQuestions.length ? formatList(report.openQuestions, "") : "None.");
-  next = replaceSection(next, "Next Action", "Run `dl plan` using `.projects/CODEBASE.md` as context.");
-  next = replaceSection(next, "Last Verification", `Project scan wrote CODEBASE.md with ${report.fileCount} observed file(s).`);
+  next = replaceSection(next, "Next Action", report.batchTasks.length
+    ? "Route `.projects/SCAN-PLAN.md` batch packets by parallel group, then merge compact findings."
+    : "Run `dl plan` using `.projects/CODEBASE.md` as context.");
+  next = replaceSection(next, "Last Verification", `Project scan wrote CODEBASE.md${report.batchTasks.length ? " and SCAN-PLAN.md" : ""} with ${report.fileCount} observed file(s).`);
   return next;
 }
 

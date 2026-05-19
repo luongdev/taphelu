@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "taphelu-agent-pack",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "managedMarker": "TAPHELU-GENERATED",
   "mcp": "mcp.json",
   "profiles": {

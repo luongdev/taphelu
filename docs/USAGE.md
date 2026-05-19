@@ -70,6 +70,7 @@ dl scan plan --path .
 ```
 
 The first command inspects structure, package files, scripts, docs, likely stack, and test commands. It respects `.gitignore` and `.agentignore`.
+If the repo is large or truncated, `dl scan` also prints an `Auto Batch Scan Plan`; with `--write`, it writes `.projects/SCAN-PLAN.md` so agents can scan one bounded batch at a time.
 
 This CLI flow prints reports. It is useful when no AI runtime is available yet, or when debugging what the agent would call.
 

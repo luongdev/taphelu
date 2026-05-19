@@ -2239,6 +2239,53 @@ test("scan write bootstraps project context only under .projects", () => {
   assert.equal(events.at(-1).type, "project_scanned");
   assert.equal(existsSync(join(root, "src", "index.js")), true);
   assert.equal(existsSync(join(root, "docs")), false);
+  assert.equal(existsSync(join(root, ".projects", "SCAN-PLAN.md")), false);
+});
+
+test("large scan emits and writes auto batch task list", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, "apps", "web"), { recursive: true });
+  mkdirSync(join(root, "services", "api"), { recursive: true });
+  mkdirSync(join(root, "infra"), { recursive: true });
+  for (let index = 0; index < 340; index += 1) {
+    const dir = index % 3 === 0 ? "apps/web" : index % 3 === 1 ? "services/api" : "infra";
+    writeFileSync(join(root, dir, `file-${index}.js`), `export const value${index} = ${index};\n`);
+  }
+  const preview = run(root, ["scan", "--path", ".", "--mode", "quick"]);
+
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /## Auto Batch Scan Plan/);
+  assert.match(preview.stdout, /### B1 - root-orientation/);
+  assert.match(preview.stdout, /dir:apps/);
+  assert.match(preview.stdout, /Parallel group: `2`/);
+  assert.equal(existsSync(join(root, ".projects")), false);
+
+  const written = run(root, ["scan", "--path", ".", "--mode", "quick", "--write"]);
+  const scanPlan = readFileSync(join(root, ".projects", "SCAN-PLAN.md"), "utf8");
+  const codebase = readFileSync(join(root, ".projects", "CODEBASE.md"), "utf8");
+  const state = readFileSync(join(root, ".projects", "STATE.md"), "utf8");
+
+  assert.equal(written.status, 0, written.stderr);
+  assert.match(scanPlan, /# Auto Batch Scan Plan/);
+  assert.match(scanPlan, /Do not dump source bodies/);
+  assert.match(codebase, /## Auto Batch Scan/);
+  assert.match(state, /created .* batch packet/);
+  assert.match(state, /SCAN-PLAN\.md/);
+  assert.equal(existsSync(join(root, ".projects", "scans")), true);
+});
+
+test("large scan records remaining directory batch instead of silently omitting dirs", () => {
+  const root = makePlainRepo();
+  for (let index = 0; index < 15; index += 1) {
+    const dir = `area-${index}`;
+    mkdirSync(join(root, dir), { recursive: true });
+    writeFileSync(join(root, dir, "index.js"), `export const value = ${index};\n`);
+  }
+  const result = run(root, ["scan", "--path", ".", "--mode", "quick"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /remaining-directories/);
+  assert.match(result.stdout, /area-12/);
 });
 
 test("scan interview works without .projects and asks targeted questions", () => {
