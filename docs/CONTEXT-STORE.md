@@ -9,6 +9,11 @@ Default layout:
   CONTEXT.md
   index.json
   active/PLAN.md
+  plans/
+    index.json
+    milestones/<id>.md
+    stories/<story-id>.md
+    tasks/<task-id>.md
   milestones/<id>/SUMMARY.md
   runs/INDEX.md
   runs/run-*.md

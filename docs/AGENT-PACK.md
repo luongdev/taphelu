@@ -58,6 +58,14 @@ Generated commands expose the same lifecycle in every runtime:
 
 `/dl-contracts` uses the `dl_contracts` umbrella MCP tool. For polyrepo work, the lead/planner flow is: strict registry check, identify current service, load outbound and inbound dependency slice, then plan. The registry covers APIs, event streams, queues, topics, pub/sub, Redis channels/streams, and service metadata.
 
+`/dl-plan` creates structured Markdown milestone/story/task artifacts under `.projects/plans/**`. `.projects/PLAN.md` is a generated summary only, and `.projects/plans/index.json` is only a cache. Dev, QA, UX, and visual QA should execute from task packets:
+
+- `dl dev implement <task-id>` or `dl_task_store action=dev_packet`
+- `dl qa review <task-id>` or `dl_task_store action=qa_packet`
+- `dl ux verify <task-id>` or `dl_task_store action=ux_packet`
+
+Agents should load only the task, parent story, parent milestone, and referenced artifacts. Do not broad-read all `.projects`.
+
 Claude gets native commands, agents with `skills` frontmatter, hooks, and `statusLine`. The Claude statusline keeps live runtime facts first: model, effort when available, and `context_window.used_percentage`, then compact Taphelu state.
 
 Runtime status surfaces are capability-based:

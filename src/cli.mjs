@@ -7,6 +7,10 @@ import { printCommands } from "./commands/commands.mjs";
 import { runAsk } from "./commands/ask.mjs";
 import { runResearch } from "./commands/research.mjs";
 import { runPlan } from "./commands/plan.mjs";
+import { runTask } from "./commands/task.mjs";
+import { runDev } from "./commands/dev.mjs";
+import { runQa } from "./commands/qa.mjs";
+import { runUx } from "./commands/ux.mjs";
 import { runWorkflow } from "./commands/run.mjs";
 import { runVerify } from "./commands/verify.mjs";
 import { runMemory, runRemember, runForget } from "./commands/memory.mjs";
@@ -47,6 +51,10 @@ export function main(argv = process.argv, cwd = process.cwd()) {
   if (command === "ask") return runAsk(root, args);
   if (command === "research") return runResearch(root, args);
   if (command === "plan") return runPlan(root, args);
+  if (command === "task") return runTask(root, args);
+  if (command === "dev") return runDev(root, args);
+  if (command === "qa") return runQa(root, args);
+  if (command === "ux") return runUx(root, args);
   if (command === "run") return runWorkflow(root, args);
   if (command === "verify") return runVerify(root, args);
   if (command === "memory") return runMemory(root, args);
@@ -86,6 +94,17 @@ Usage:
   dl ask [--mode quick|standard|deep] [--approval-scope text] [--context path] [--write] <goal>
   dl research [--source text] [--finding text] [--confidence low|medium|high] [--approval-scope text] [--write] <question>
   dl plan [--task text] [--verification text] [--context path] [--write] <goal>
+  dl plan create --milestone M32 --story S01 [--task text] [--verification text] [--write] <goal>
+  dl plan render --milestone M32 [--write]
+  dl plan validate [--milestone M32]
+  dl plan migrate [--from .projects/PLAN.md] [--milestone M32] [--write]
+  dl task list [--milestone M32] [--story M32-S01] [--status ready]
+  dl task show M32-S01-T01 [--json]
+  dl task status M32-S01-T01 --set in_progress|blocked|review|done|verified
+  dl task validate M32-S01-T01
+  dl dev implement M32-S01-T01
+  dl qa review M32-S01-T01
+  dl ux verify M32-S01-T01
   dl run [--source text] [--finding text] [--task text] [--verification text] [--write] <goal>
   dl run --resume run-id [--write]
   dl verify [--artifact path] [--test text] [--review-trigger text] [--reviewed] [--write] <goal>
@@ -133,6 +152,10 @@ Commands:
   ask       Produce a requirement packet from a goal.
   research  Produce a research packet from findings and sources.
   plan      Produce an executable plan packet.
+  task      List, show, validate, or update structured task contracts.
+  dev       Print a bounded dev implementation packet for a task.
+  qa        Print a QA review packet for a task.
+  ux        Print a UX verification packet for a task.
   run       Produce or record an end-to-end workflow run.
   verify    Produce or record a verification verdict.
   memory    Review or prune curated project memory.

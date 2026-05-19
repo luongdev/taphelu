@@ -8,6 +8,8 @@ import { analyzeContractsCheck, analyzeContractsCurrent, analyzeContractsDeps, a
 import { analyzeDeepScanPlan, analyzeProjectScan, analyzeScanInterview, analyzeServiceTopology, applyDeepScanPlan, applyProjectScan, applyScanInterview, applyServiceTopology } from "../commands/scan.mjs";
 import { analyzeContextIndex, analyzeMilestoneCompaction, analyzePlanCompaction, analyzeRunsCompaction, applyContextIndex, applyMilestoneCompaction, applyPlanCompaction, applyRunsCompaction, getContextArtifact, publicCompactionSummary, publicContextIndexSummary, readExistingContextIndex, searchContextArtifacts } from "../context-store.mjs";
 import { evaluateCrossAiReview } from "../review-policy.mjs";
+import { analyzePlanMigration, analyzePlanRender, analyzeStructuredPlanCreate, analyzeTaskStatus, applyPlanMigration, applyPlanRender, applyStructuredPlanCreate, applyTaskStatus, buildDevPacket, buildPlanValidationReport, buildQaPacket, buildTaskListReport, buildTaskShowReport, buildTaskStatusReport, buildUxPacket, getTaskPacket, listTasks, validatePlanStore } from "../task-store.mjs";
+import { analyzePlan } from "../commands/plan.mjs";
 import {
   captureL0,
   closeSession,
@@ -45,6 +47,36 @@ export const TAPHELU_MCP_TOOLS = [
     full: booleanSchema("For action=get, return full artifact content instead of a compact preview."),
     start_line: numberSchema("For action=get, first 1-based line to return."),
     end_line: numberSchema("For action=get, last 1-based line to return."),
+  }),
+  tool("dl_task_store", "Create, render, validate, query, and packetize structured milestone/story/task plans.", {
+    cwd: stringSchema("Workspace directory. Defaults to server cwd."),
+    action: stringSchema("Action: plan_create, plan_render, plan_validate, task_list, task_get, task_status, dev_packet, qa_packet, ux_packet, or migrate."),
+    milestone: stringSchema("Milestone id, e.g. M32."),
+    story: stringSchema("Story id or suffix, e.g. S01 or M32-S01."),
+    task_id: stringSchema("Task id, e.g. M32-S01-T01."),
+    goal: stringSchema("Goal for action=plan_create."),
+    status: stringSchema("Task status for action=task_status."),
+    set: stringSchema("Task status for action=task_status."),
+    from: stringSchema("Legacy plan path for action=migrate."),
+    write: booleanSchema("Whether to write changes. Defaults to false preview."),
+    task: arraySchema("Task objective strings for action=plan_create."),
+    verification: arraySchema("Verification intent per task."),
+    context: arraySchema("Context artifact paths for action=plan_create."),
+    requirement: arraySchema("Requirements for action=plan_create."),
+    research: arraySchema("Research inputs for action=plan_create."),
+    constraint: arraySchema("Constraints for action=plan_create."),
+    non_goal: arraySchema("Non-goals for action=plan_create."),
+    assumption: arraySchema("Assumptions for action=plan_create."),
+    risk: arraySchema("Risks for action=plan_create."),
+    approval_gate: arraySchema("Approval gates for action=plan_create."),
+    owner: arraySchema("Owner role per task."),
+    boundary: arraySchema("Ownership boundary per task."),
+    depends_on: arraySchema("Dependencies per task."),
+    testability: arraySchema("Testability class per task."),
+    required_evidence: arraySchema("Required evidence per task."),
+    test_effort_reason: arraySchema("Test effort reason per task."),
+    testing_strictness: stringSchema("Testing strictness for action=plan_create: low, medium, or deep."),
+    json: booleanSchema("Return task packet as structured JSON when applicable."),
   }),
   tool("dl_observe", "Record an agent/user/tool observation into L0 memory.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
@@ -357,6 +389,119 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
     userError("Invalid dl_context_store action. Expected index, search, get, or compact.");
   }
 
+  if (name === "dl_task_store") {
+    const action = String(args.action || "task_list").trim() || "task_list";
+    if (action === "plan_create") {
+      const goal = String(args.goal || "").trim();
+      if (!goal) userError("dl_task_store action=plan_create requires goal.");
+      const plan = analyzePlan(goal, {
+        contexts: normalizeArray(args.context),
+        requirements: normalizeArray(args.requirement),
+        research: normalizeArray(args.research),
+        tasks: normalizeArray(args.task),
+        constraints: normalizeArray(args.constraint),
+        nonGoals: normalizeArray(args.non_goal),
+        assumptions: normalizeArray(args.assumption),
+        risks: normalizeArray(args.risk),
+        approvalGates: normalizeArray(args.approval_gate),
+        verifications: normalizeArray(args.verification),
+        owners: normalizeArray(args.owner),
+        boundaries: normalizeArray(args.boundary),
+        dependsOn: normalizeArray(args.depends_on || args["depends-on"]),
+        testabilities: normalizeArray(args.testability),
+        requiredEvidence: normalizeArray(args.required_evidence || args["required-evidence"]),
+        testEffortReasons: normalizeArray(args.test_effort_reason || args["test-effort-reason"]),
+        testingStrictness: args.testing_strictness || args["testing-strictness"] || "medium",
+      });
+      const report = analyzeStructuredPlanCreate(root, {
+        goal,
+        milestone: args.milestone,
+        story: args.story,
+        plan,
+      });
+      if (args.write) applyStructuredPlanCreate(root, report);
+      return { action, report: compactPlanCreateReport(report), wrote: Boolean(args.write), nextRoute: args.write ? "done" : report.nextRoute };
+    }
+    if (action === "plan_render") {
+      const report = analyzePlanRender(root, { milestone: args.milestone });
+      if (args.write) applyPlanRender(root, report);
+      return {
+        action,
+        report: {
+          kind: report.kind,
+          milestone: compactMilestone(report.milestone),
+          storyCount: report.stories.length,
+          taskCount: report.tasks.length,
+          summary: report.summary,
+          nextRoute: report.nextRoute,
+        },
+        wrote: Boolean(args.write),
+        nextRoute: args.write ? "done" : report.nextRoute,
+      };
+    }
+    if (action === "plan_validate") {
+      const report = validatePlanStore(root, { milestone: args.milestone });
+      return { action, report: { ...report, summary: buildPlanValidationReport(report) }, nextRoute: report.nextRoute };
+    }
+    if (action === "task_list") {
+      const report = listTasks(root, {
+        milestone: args.milestone,
+        story: args.story,
+        status: args.status,
+      });
+      return {
+        action,
+        report: {
+          kind: report.kind,
+          filters: report.filters,
+          tasks: report.tasks.map(compactTask),
+          summary: buildTaskListReport(report),
+          nextRoute: report.nextRoute,
+        },
+        nextRoute: report.nextRoute,
+      };
+    }
+    if (action === "task_get") {
+      const report = getTaskPacket(root, args.task_id || args.id);
+      return {
+        action,
+        report: args.json ? report : compactTaskPacket(report),
+        nextRoute: report.nextRoute,
+      };
+    }
+    if (action === "task_status") {
+      const report = analyzeTaskStatus(root, args.task_id || args.id, args.set || args.status);
+      if (args.write && !report.blockers.length) applyTaskStatus(root, report);
+      return {
+        action,
+        report: args.json ? report : {
+          kind: report.kind,
+          taskId: report.taskId,
+          from: report.from,
+          to: report.to,
+          blockers: report.blockers,
+          summary: buildTaskStatusReport(report, Boolean(args.write && !report.blockers.length)),
+          nextRoute: report.nextRoute,
+        },
+        wrote: Boolean(args.write && !report.blockers.length),
+        nextRoute: args.write && !report.blockers.length ? "done" : report.nextRoute,
+      };
+    }
+    if (action === "dev_packet") return { action, packet: buildDevPacket(root, args.task_id || args.id), nextRoute: "implement_task" };
+    if (action === "qa_packet") return { action, packet: buildQaPacket(root, args.task_id || args.id), nextRoute: "review_task" };
+    if (action === "ux_packet") return { action, packet: buildUxPacket(root, args.task_id || args.id), nextRoute: "verify_ux" };
+    if (action === "migrate") {
+      const report = analyzePlanMigration(root, {
+        from: args.from,
+        milestone: args.milestone,
+        story: args.story,
+      });
+      if (args.write) applyPlanMigration(root, report);
+      return { action, report, wrote: Boolean(args.write), nextRoute: args.write ? "done" : report.nextRoute };
+    }
+    userError("Invalid dl_task_store action. Expected plan_create, plan_render, plan_validate, task_list, task_get, task_status, dev_packet, qa_packet, ux_packet, or migrate.");
+  }
+
   if (name === "dl_scan_project") {
     const action = String(args.action || "scan").trim() || "scan";
     if (action === "scan") {
@@ -601,6 +746,76 @@ function normalizeArray(value) {
   return [String(value).trim()].filter(Boolean);
 }
 
+function compactPlanCreateReport(report) {
+  return {
+    kind: report.kind,
+    milestone: compactMilestone(report.milestone),
+    story: compactStory(report.story),
+    tasks: report.tasks.map(compactTask),
+    files: report.files,
+    nextRoute: report.nextRoute,
+  };
+}
+
+function compactTaskPacket(packet) {
+  return {
+    kind: packet.kind,
+    task: compactTask(packet.task),
+    story: compactStory(packet.story),
+    milestone: compactMilestone(packet.milestone),
+    dependencies: (packet.dependencies || []).map(compactTask),
+    blockers: packet.blockers || [],
+    summary: buildTaskShowReport(packet),
+    nextRoute: packet.nextRoute,
+  };
+}
+
+function compactMilestone(milestone) {
+  if (!milestone) return null;
+  return {
+    id: milestone.id,
+    title: milestone.title,
+    status: milestone.status,
+    storyIds: milestone.storyIds || [],
+    updatedAt: milestone.updatedAt,
+  };
+}
+
+function compactStory(story) {
+  if (!story) return null;
+  return {
+    id: story.id,
+    title: story.title,
+    status: story.status,
+    milestoneId: story.milestoneId,
+    taskIds: story.taskIds || [],
+    acceptanceCriteriaCount: story.acceptanceCriteria?.length || 0,
+    updatedAt: story.updatedAt,
+  };
+}
+
+function compactTask(task) {
+  if (!task) return null;
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    milestoneId: task.milestoneId,
+    storyId: task.storyId,
+    owner: task.owner,
+    parallelGroup: task.parallelGroup || "main",
+    dependsOn: task.dependsOn || [],
+    blockedBy: task.blockedBy || [],
+    testability: task.testability,
+    risk: task.risk,
+    acceptanceCriteriaCount: task.acceptanceCriteria?.length || 0,
+    requiredEvidenceCount: task.requiredEvidence?.length || 0,
+    changedFilesCount: task.changedFiles?.length || 0,
+    evidenceCount: task.evidence?.length || 0,
+    updatedAt: task.updatedAt,
+  };
+}
+
 function normalizeToolName(name) {
   const aliases = {
     taphelu_start: "dl_start",
@@ -614,6 +829,7 @@ function normalizeToolName(name) {
     taphelu_memory_promote: "dl_memory_promote",
     taphelu_cleanup_context: "dl_cleanup_context",
     taphelu_context_store: "dl_context_store",
+    taphelu_task_store: "dl_task_store",
     taphelu_review_status: "dl_review_status",
     taphelu_scan_project: "dl_scan_project",
     taphelu_contracts: "dl_contracts",

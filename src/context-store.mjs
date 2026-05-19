@@ -489,6 +489,10 @@ function artifactType(display) {
   const path = display.replaceAll("\\", "/");
   if (path.endsWith("/STATE.md") || path.endsWith(".projects/STATE.md")) return "state";
   if (path.endsWith("/MEMORY.md") || path.endsWith(".projects/MEMORY.md")) return "memory";
+  if (path.includes(".projects/plans/tasks/") || path.includes("/plans/tasks/")) return "task";
+  if (path.includes(".projects/plans/stories/") || path.includes("/plans/stories/")) return "story";
+  if (path.includes(".projects/plans/runs/") || path.includes("/plans/runs/")) return "task-run";
+  if (path.includes(".projects/plans/milestones/") || path.includes("/plans/milestones/")) return "milestone";
   if (path.includes("/milestones/")) return "milestone";
   if (path.includes("/runs/")) return "run";
   if (path.includes("/archive/")) return "archive";
@@ -501,14 +505,14 @@ function artifactType(display) {
 }
 
 function artifactTitle(content, display) {
-  const heading = content.match(/^#\s+(.+?)\s*$/m)?.[1];
+  const heading = stripFrontmatter(content).match(/^#\s+(.+?)\s*$/m)?.[1];
   if (heading) return singleLine(heading);
   return basename(display);
 }
 
 function summarizeArtifact(content, display) {
   if (unsafeMemory(content)) return "Content may contain sensitive or noisy details; load only with explicit need.";
-  const lines = content
+  const lines = stripFrontmatter(content)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#") && !unsafeMemory(line));
@@ -516,8 +520,26 @@ function summarizeArtifact(content, display) {
   return clamp(singleLine(summary || artifactTitle(content, display)), MAX_INDEX_SUMMARY_CHARS);
 }
 
+function stripFrontmatter(content) {
+  const text = String(content || "");
+  const start = text.match(/^---\r?\n/);
+  if (!start) return text;
+  const end = text.search(/\r?\n---/);
+  if (end === -1 || end === 0) return text;
+  const close = text.slice(end).match(/^\r?\n---/)[0];
+  return text.slice(end + close.length).trimStart();
+}
+
 function artifactId(type, display) {
   const path = display.replaceAll("\\", "/");
+  const planMilestone = path.match(/plans\/milestones\/([^/]+)\.(?:md|json)$/);
+  if (planMilestone) return `milestone:${planMilestone[1]}`;
+  const story = path.match(/plans\/stories\/([^/]+)\.(?:md|json)$/);
+  if (story) return `story:${story[1]}`;
+  const task = path.match(/plans\/tasks\/([^/]+)\.(?:md|json)$/);
+  if (task) return `task:${task[1]}`;
+  const taskRun = path.match(/plans\/runs\/([^/]+)\/([^/]+)$/);
+  if (taskRun) return `task-run:${taskRun[1]}-${taskRun[2].replace(/\.[^.]+$/, "")}`;
   const milestone = path.match(/milestones\/([^/]+)\/SUMMARY\.md$/);
   if (milestone) return `milestone:${milestone[1]}`;
   const run = path.match(/runs\/(run-[^/]+)\.md$/);
@@ -560,6 +582,8 @@ function buildMilestoneSummary(root, id) {
     "API-CONTRACTS.md",
     "RUNS.md",
     "active/PLAN.md",
+    "PLAN.md",
+    "plans/index.json",
   ].filter((name) => readProjectFile(root, name).trim());
   return `# Milestone ${id} Summary
 

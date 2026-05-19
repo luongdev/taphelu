@@ -34,6 +34,55 @@ export function parseArgs(args) {
       options.full = true;
       continue;
     }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    if (arg.startsWith("--milestone=")) {
+      options.milestone = arg.slice("--milestone=".length);
+      continue;
+    }
+    if (arg === "--milestone") {
+      options.milestone = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--story=")) {
+      options.story = arg.slice("--story=".length);
+      continue;
+    }
+    if (arg === "--story") {
+      options.story = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--status=")) {
+      options.status = arg.slice("--status=".length);
+      continue;
+    }
+    if (arg === "--status") {
+      options.status = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--set=")) {
+      options.set = arg.slice("--set=".length);
+      continue;
+    }
+    if (arg === "--set") {
+      options.set = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--from=")) {
+      options.from = arg.slice("--from=".length);
+      continue;
+    }
+    if (arg === "--from") {
+      options.from = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
     if (arg.startsWith("--start-line=")) {
       options["start-line"] = arg.slice("--start-line=".length);
       continue;
@@ -466,6 +515,24 @@ export function parseArgs(args) {
     }
     if (arg === "--objective") {
       options.objective = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--repo-shape=")) {
+      options["repo-shape"] = arg.slice("--repo-shape=".length);
+      continue;
+    }
+    if (arg === "--repo-shape") {
+      options["repo-shape"] = requiredValue(args, i, arg);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--contract-registry=")) {
+      options["contract-registry"] = arg.slice("--contract-registry=".length);
+      continue;
+    }
+    if (arg === "--contract-registry") {
+      options["contract-registry"] = requiredValue(args, i, arg);
       i += 1;
       continue;
     }

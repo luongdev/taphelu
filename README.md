@@ -320,6 +320,7 @@ Prefer reinstalling with `dl install ... --write` or removing Taphelu-managed fi
 - [Agent Pack](docs/AGENT-PACK.md)
 - [Project Scan](docs/PROJECT-SCAN.md)
 - [Context Store](docs/CONTEXT-STORE.md)
+- [Task Store](docs/TASK-STORE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Release Checklist](docs/RELEASE.md)
 
@@ -639,6 +640,7 @@ Nên reinstall bằng `dl install ... --write` hoặc chỉ xóa file có Taphel
 - [Agent Pack](docs/AGENT-PACK.md)
 - [Project Scan](docs/PROJECT-SCAN.md)
 - [Context Store](docs/CONTEXT-STORE.md)
+- [Task Store](docs/TASK-STORE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Release Checklist](docs/RELEASE.md)
 

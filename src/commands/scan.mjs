@@ -6,6 +6,7 @@ import { appendEvent, timestampForId } from "../events.mjs";
 import { fail } from "../errors.mjs";
 import { readProjectFile, relativeProjectPath, withProjectFilesTransaction, writeTextFileAtomic } from "../project.mjs";
 import { escapeTable, formatList, replaceSection, unsafeMemory } from "../utils.mjs";
+import { analyzeStructuredPlanCreate, nextMilestoneId, structuredPlanWriteNames, writeStructuredPlanCreateFiles } from "../task-store.mjs";
 
 const IGNORE_DIRS = new Set([
   ".git",
@@ -68,6 +69,7 @@ const ENTRYPOINT_NAMES = [
 
 const TOPOLOGY_FOCUS = new Set(["services", "contracts", "topology", "all"]);
 const MAX_CONTRACT_SNIFF_BYTES = 1024 * 1024;
+const REPO_SHAPES = new Set(["single", "monorepo", "polyrepo", "unknown"]);
 
 export function runScan(root, rawArgs) {
   const [subcommand, ...rest] = rawArgs;
@@ -184,7 +186,15 @@ export function applyProjectScan(root, report) {
   const codebase = renderCodebaseArtifact(report);
   const projectFiles = ["events.jsonl", "CODEBASE.md", "PROJECT.md", "STATE.md"];
   if (report.batchTasks.length) projectFiles.push("SCAN-PLAN.md");
-  withProjectFilesTransaction(root, projectFiles, () => {
+  const taskStoreReport = report.batchTasks.length ? buildScanTaskStoreReport(root, {
+    goal: `Execute scan batches for ${report.scanPath}.`,
+    tasks: report.batchTasks,
+  }) : null;
+  const transactionFiles = [...new Set([
+    ...projectFiles,
+    ...(taskStoreReport ? structuredPlanWriteNames(root, taskStoreReport) : []),
+  ])];
+  withProjectFilesTransaction(root, transactionFiles, () => {
     writeTextFileAtomic(join(root, ".projects", "CODEBASE.md"), codebase);
     if (report.batchTasks.length) {
       mkdirSync(join(root, ".projects", "scans"), { recursive: true });
@@ -206,6 +216,7 @@ export function applyProjectScan(root, report) {
         next_route: report.nextRoute,
       },
     });
+    if (taskStoreReport) writeStructuredPlanCreateFiles(root, taskStoreReport);
   });
 }
 
@@ -303,10 +314,13 @@ export function analyzeScanInterview(root, input = {}) {
     answers.users.length ||
     answers.coreFlows.length ||
     answers.objective ||
+    answers.repoShape ||
+    answers.contractRegistry ||
     answers.contractSources.length ||
     answers.restrictedAreas.length
   );
   const questions = buildDomainQuestions(scan, answers);
+  const nextRoute = scanInterviewNextRoute(scan, answers, questions);
   return {
     kind: hasAnswers ? "domain_context" : "domain_interview",
     scan,
@@ -314,7 +328,7 @@ export function analyzeScanInterview(root, input = {}) {
     hasAnswers,
     questions,
     remainingOpenQuestions: questions.map((question) => question.question),
-    nextRoute: hasAnswers ? "scan_plan" : "answer_domain_questions",
+    nextRoute,
   };
 }
 
@@ -389,6 +403,14 @@ ${formatList(report.answers.coreFlows, "Not provided.")}
 
 ${report.answers.objective || "Not provided."}
 
+## Repo Shape
+
+${report.answers.repoShape || "Not provided."}
+
+## Contract Registry
+
+${report.answers.contractRegistry || "Not provided."}
+
 ## Contract Sources
 
 ${formatList(report.answers.contractSources, "Not provided.")}
@@ -439,7 +461,18 @@ export function analyzeDeepScanPlan(root, input = {}) {
 
 export function applyDeepScanPlan(root, report) {
   mkdirSync(join(root, ".projects"), { recursive: true });
-  withProjectFilesTransaction(root, ["events.jsonl", "SCAN-PLAN.md", "STATE.md", "PROJECT.md"], () => {
+  const taskStoreReport = buildScanTaskStoreReport(root, {
+    goal: `Execute deep scan plan for ${report.scan.scanPath}.`,
+    tasks: report.tasks,
+  });
+  const transactionFiles = [...new Set([
+    "events.jsonl",
+    "SCAN-PLAN.md",
+    "STATE.md",
+    "PROJECT.md",
+    ...structuredPlanWriteNames(root, taskStoreReport),
+  ])];
+  withProjectFilesTransaction(root, transactionFiles, () => {
     writeTextFileAtomic(join(root, ".projects", "PROJECT.md"), updateProjectOnboarding(readProjectFile(root, "PROJECT.md"), report.scan));
     writeTextFileAtomic(join(root, ".projects", "SCAN-PLAN.md"), renderScanPlanArtifact(report));
     writeTextFileAtomic(join(root, ".projects", "STATE.md"), updateScanPlanState(readProjectFile(root, "STATE.md"), report));
@@ -457,6 +490,7 @@ export function applyDeepScanPlan(root, report) {
         next_route: report.nextRoute,
       },
     });
+    writeStructuredPlanCreateFiles(root, taskStoreReport);
   });
 }
 
@@ -1337,10 +1371,26 @@ function buildDomainQuestions(scan, answers) {
       evidence: "Repo structure does not reveal the current agent objective.",
     });
   }
+  if (!answers.repoShape) {
+    questions.push({
+      id: "repo_shape",
+      question: "Is this repo a single service/app, a monorepo, or one repo in a polyrepo system?",
+      evidence: repoShapeEvidence(scan),
+    });
+  }
+  if ((answers.repoShape === "polyrepo" || scan.serviceSignals.length) && !answers.contractRegistry) {
+    questions.push({
+      id: "contract_registry",
+      question: "If this is polyrepo or service-to-service work, where is the shared contract registry or source of truth?",
+      evidence: answers.repoShape === "polyrepo"
+        ? "Repo shape answer says polyrepo, so cross-repo communication needs a registry/source."
+        : `Service/API signals detected: ${scan.serviceSignals.join(", ")}.`,
+    });
+  }
   if (scan.serviceSignals.length && !answers.contractSources.length) {
     questions.push({
       id: "contract_sources",
-      question: "What is the source of truth for API/service contracts?",
+      question: "What is the source of truth for API/service/message contracts in this repo?",
       evidence: `Service/API signals detected: ${scan.serviceSignals.join(", ")}.`,
     });
   }
@@ -1359,6 +1409,21 @@ function buildDomainQuestions(scan, answers) {
     });
   }
   return questions.slice(0, 7);
+}
+
+function repoShapeEvidence(scan) {
+  if (scan.serviceSignals.includes("multiple package roots")) return "Multiple package roots were detected; this may be a monorepo.";
+  if (scan.serviceSignals.length) return `Service/deploy/API signals were detected: ${scan.serviceSignals.join(", ")}.`;
+  if (scan.topLevelDirs.some((dir) => ["apps", "services", "packages"].includes(dir))) return "Conventional multi-package directories are present.";
+  return "Quick scan cannot infer whether this repo is standalone, monorepo, or part of a polyrepo.";
+}
+
+function scanInterviewNextRoute(scan, answers, questions) {
+  if (questions.length) return "answer_domain_questions";
+  if (answers.repoShape === "polyrepo") return "contracts_check_or_init";
+  if (answers.repoShape === "monorepo" && scan.serviceSignals.length) return "scan_map_or_plan";
+  if (scan.largeRepo || scan.truncated) return "scan_plan";
+  return "plan";
 }
 
 function buildDeepScanTasks(scan, answers) {
@@ -1396,8 +1461,17 @@ function buildDeepScanTasks(scan, answers) {
     ], ".projects/CONCERNS.md", "artifact-check", 1),
   ];
 
+  if (answers.repoShape === "polyrepo") {
+    tasks.push(taskPacket(nextDeepScanTaskId(tasks), "contracts-registry", "taphelu-workflow-adapter", "shared contract registry/source of truth only", ["DS1", "DS5"], "Find or initialize the shared `.projects/contracts` registry before implementation planning.", [
+      "repo shape answer",
+      "contract registry answer",
+      "contract source answer",
+      "service/API/messaging signals",
+    ], ".projects/CONTRACT-REGISTRY.md", "artifact-check", 2));
+  }
+
   if (scan.serviceSignals.length) {
-    tasks.push(taskPacket("DS7", "services-contracts", "taphelu-architect", "service/API indicators only; no topology graph yet", ["DS1"], "Locate service and contract sources for Milestone 23 mapping.", [
+    tasks.push(taskPacket(nextDeepScanTaskId(tasks), "services-contracts", "taphelu-architect", "service/API indicators only; no topology graph yet", ["DS1"], "Locate service and contract sources for Milestone 23 mapping.", [
       "Docker Compose/Kubernetes hints",
       "OpenAPI/GraphQL/protobuf/AsyncAPI files",
       "route/controller paths",
@@ -1406,6 +1480,10 @@ function buildDeepScanTasks(scan, answers) {
   }
 
   return tasks;
+}
+
+function nextDeepScanTaskId(tasks) {
+  return `DS${tasks.length + 1}`;
 }
 
 function buildAutoScanBatchTasks(scan) {
@@ -1515,6 +1593,32 @@ function taskPacket(id, focusArea, ownerRole, boundary, dependsOn, objective, ev
   };
 }
 
+function buildScanTaskStoreReport(root, input) {
+  const idMap = new Map(input.tasks.map((task, index) => [task.id, `T${String(index + 1).padStart(2, "0")}`]));
+  const tasks = input.tasks.map((task, index) => ({
+    id: idMap.get(task.id),
+    objective: task.objective,
+    owner: task.ownerRole,
+    boundary: task.boundary,
+    dependsOn: (task.dependsOn || []).map((dep) => idMap.get(dep)).filter(Boolean),
+    verification: `Write compact findings to ${task.outputArtifact}.`,
+    testability: task.testability,
+    requiredEvidence: `Evidence collected: ${task.evidenceToCollect.join(", ")}.`,
+    testEffortReason: "Scan task: artifact evidence is enough unless follow-up implementation changes code.",
+    parallelGroup: String(task.parallelGroup || 1),
+    expectedOutputs: [task.outputArtifact],
+    allowedPaths: [task.outputArtifact],
+    references: ["CODEBASE.md", "SCAN-PLAN.md"],
+  }));
+  return analyzeStructuredPlanCreate(root, {
+    goal: input.goal,
+    milestone: nextMilestoneId(root),
+    story: "S01",
+    references: ["CODEBASE.md", "SCAN-PLAN.md"],
+    tasks,
+  });
+}
+
 function groupTasksByParallel(tasks) {
   const grouped = {};
   for (const task of tasks) {
@@ -1534,10 +1638,19 @@ function normalizeScanContextInput(input = {}) {
       users: cleanUserInputList(input.user || input.users),
       coreFlows: cleanUserInputList(input["core-flow"] || input.core_flow || input.coreFlows),
       objective: cleanUserInput(input.objective),
+      repoShape: normalizeRepoShape(input["repo-shape"] || input.repo_shape || input.repoShape),
+      contractRegistry: cleanUserInput(input["contract-registry"] || input.contract_registry || input.contractRegistry),
       contractSources: cleanUserInputList(input["contract-source"] || input.contract_source || input.contractSources),
       restrictedAreas: cleanUserInputList(input["restricted-area"] || input.restricted_area || input.restrictedAreas),
     },
   };
+}
+
+function normalizeRepoShape(value) {
+  const normalized = cleanUserInput(value).toLowerCase();
+  if (!normalized) return "";
+  if (REPO_SHAPES.has(normalized)) return normalized;
+  fail(`Invalid repo shape: ${value}. Expected single, monorepo, polyrepo, or unknown.`);
 }
 
 function cleanUserInputList(value) {

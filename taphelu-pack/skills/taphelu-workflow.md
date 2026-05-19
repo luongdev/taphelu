@@ -9,7 +9,9 @@ Use the CLI primitives when MCP is unavailable or when a human-readable packet i
 
 - `dl ask` for requirement packets.
 - `dl research` for sourced findings.
-- `dl plan` for executable plans.
+- `dl plan create` for structured Markdown milestone/story/task contracts; `PLAN.md` is only a generated view.
+- `dl task list/show/status/validate` to inspect task contracts by task id.
+- `dl dev implement`, `dl qa review`, and `dl ux verify` to produce role packets.
 - `dl run` for end-to-end packet assembly.
 - `dl config get testing.strictness` to load project test strictness.
 - `dl scan --mode quick` before planning inside an existing un-mapped repo.
@@ -21,6 +23,6 @@ Use the CLI primitives when MCP is unavailable or when a human-readable packet i
 
 Keep packets concise. State assumptions, evidence, blockers, and next route.
 
-Planner output should be task contracts, not implementation. Maximize parallelism, split FE/BE and infra/business boundaries when possible, then route tasks through QA testability review before dev work.
+Planner output should be structured task contracts under `.projects/plans/**`, not implementation. Maximize parallelism, split FE/BE and infra/business boundaries when possible, then route tasks through QA testability review before dev work.
 
 Record durable observations through MCP memory tools instead of duplicating raw context in Markdown.

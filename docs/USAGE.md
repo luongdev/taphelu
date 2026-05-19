@@ -164,14 +164,28 @@ dl research \
   "What constraints affect account deletion?"
 ```
 
-Create a plan:
+Create a structured plan:
 
 ```bash
-dl plan \
+dl plan create \
+  --milestone M01 \
+  --story S01 \
   --task "Add account deletion endpoint" \
   --verification "Endpoint rejects unauthorized callers and writes audit event" \
+  --write \
   "Implement account deletion"
 ```
+
+Run role packets by task id:
+
+```bash
+dl task list --milestone M01
+dl dev implement M01-S01-T01
+dl qa review M01-S01-T01
+dl ux verify M01-S01-T01
+```
+
+Markdown files under `.projects/plans/**` are the source of truth. `.projects/PLAN.md` is only a generated summary for humans, and `.projects/plans/index.json` is only a generated cache for fast list/search.
 
 Run an end-to-end packet:
 

@@ -47,6 +47,17 @@ Use these fields to carry the QA testability gate into closeout.
 - `get`: fetch one selected artifact by id; use `start_line` and `end_line` for targeted reads.
 - `compact`: preview or write milestone, runs, or plan compaction.
 
+`dl_task_store` actions:
+
+- `plan_create`: preview or write structured milestone/story/task artifacts.
+- `plan_render`: render `.projects/PLAN.md` from Markdown artifacts under `.projects/plans/**`.
+- `plan_validate`: validate structured plan/task contracts.
+- `task_list`, `task_get`, `task_status`: inspect or update task state.
+- `dev_packet`, `qa_packet`, `ux_packet`: return bounded role-specific context for one task id.
+- `migrate`: convert a legacy `.projects/PLAN.md` view into Markdown task/story/milestone artifacts.
+
+All write actions are preview-first unless `write=true`.
+
 `dl_scan_project` maps an existing repo into compact project context. It reports structure, stack signals, service/API signals, docs, entrypoints, and inferred test commands without storing raw source dumps. It respects `.gitignore` and `.agentignore`.
 
 Use its `action` field for onboarding flow:

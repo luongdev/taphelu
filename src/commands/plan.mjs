@@ -4,8 +4,24 @@ import { appendEvent, timestampForId } from "../events.mjs";
 import { hasAny, formatList, escapeTable } from "../utils.mjs";
 import { fail } from "../errors.mjs";
 import { testingStrictness } from "../project-config.mjs";
+import {
+  analyzePlanMigration,
+  analyzePlanRender,
+  analyzeStructuredPlanCreate,
+  applyPlanMigration,
+  applyPlanRender,
+  applyStructuredPlanCreate,
+  buildPlanValidationReport,
+  validatePlanStore,
+} from "../task-store.mjs";
 
 export function runPlan(root, rawArgs) {
+  const [subcommand, ...rest] = rawArgs;
+  if (["create", "render", "validate", "migrate"].includes(subcommand)) {
+    runStructuredPlan(root, subcommand, rest);
+    return;
+  }
+
   const { options, values } = parseArgs(rawArgs);
   const goal = values.join(" ").trim();
 
@@ -51,6 +67,66 @@ export function runPlan(root, rawArgs) {
         next_route: plan.nextRoute,
       },
     });
+  }
+}
+
+function runStructuredPlan(root, subcommand, rawArgs) {
+  const { options, values } = parseArgs(rawArgs);
+  if (subcommand === "create") {
+    const goal = values.join(" ").trim();
+    if (!goal) fail("Missing goal. Usage: dl plan create --milestone M32 --story S01 [--write] <goal>");
+    const plan = analyzePlan(goal, {
+      contexts: options.context ?? [],
+      requirements: options.requirement ?? [],
+      research: options.research ?? [],
+      tasks: options.task ?? [],
+      constraints: options.constraint ?? [],
+      nonGoals: options["non-goal"] ?? [],
+      assumptions: options.assumption ?? [],
+      risks: options.risk ?? [],
+      approvalGates: options["approval-gate"] ?? [],
+      verifications: options.verification ?? [],
+      owners: options.owner ?? [],
+      boundaries: options.boundary ?? [],
+      dependsOn: options["depends-on"] ?? [],
+      testabilities: options.testability ?? [],
+      requiredEvidence: options["required-evidence"] ?? [],
+      testEffortReasons: options["test-effort-reason"] ?? [],
+      testingStrictness: testingStrictness(root, options["testing-strictness"] || ""),
+    });
+    const report = analyzeStructuredPlanCreate(root, {
+      goal,
+      milestone: options.milestone,
+      story: options.story,
+      plan,
+      acceptanceCriteria: options["acceptance-criteria"] ?? [],
+    });
+    console.log(report.summary);
+    if (options.write) applyStructuredPlanCreate(root, report);
+    return;
+  }
+
+  if (subcommand === "render") {
+    const report = analyzePlanRender(root, { milestone: options.milestone });
+    console.log(report.summary);
+    if (options.write) applyPlanRender(root, report);
+    return;
+  }
+
+  if (subcommand === "validate") {
+    const report = validatePlanStore(root, { milestone: options.milestone });
+    console.log(buildPlanValidationReport(report));
+    return;
+  }
+
+  if (subcommand === "migrate") {
+    const report = analyzePlanMigration(root, {
+      from: options.from,
+      milestone: options.milestone,
+      story: options.story,
+    });
+    console.log(report.summary);
+    if (options.write) applyPlanMigration(root, report);
   }
 }
 

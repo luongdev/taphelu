@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "taphelu-agent-pack",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "managedMarker": "TAPHELU-GENERATED",
   "mcp": "mcp.json",
   "profiles": {
@@ -34,12 +34,12 @@
   "agents": [
     { "name": "taphelu-lead", "path": "agents/taphelu-lead.md", "requiredSkills": ["taphelu-core", "taphelu-workflow", "taphelu-memory", "taphelu-verify", "taphelu-context"], "mcpTools": ["dl_start", "dl_context", "dl_checkpoint", "dl_close"], "canDelegate": true, "closeoutGate": true },
     { "name": "taphelu-analyst", "path": "agents/taphelu-analyst.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_observe"], "canDelegate": false, "closeoutGate": false },
-    { "name": "taphelu-planner", "path": "agents/taphelu-planner.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_recall", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-planner", "path": "agents/taphelu-planner.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_recall", "dl_task_store", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
     { "name": "taphelu-architect", "path": "agents/taphelu-architect.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_recall"], "canDelegate": false, "closeoutGate": false },
-    { "name": "taphelu-dev", "path": "agents/taphelu-dev.md", "requiredSkills": ["taphelu-core", "taphelu-workflow"], "mcpTools": ["dl_observe", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
-    { "name": "taphelu-qa", "path": "agents/taphelu-qa.md", "requiredSkills": ["taphelu-verify"], "mcpTools": ["dl_context", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
-    { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_observe"], "canDelegate": false, "closeoutGate": false },
-    { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md", "requiredSkills": ["taphelu-browser", "taphelu-verify"], "mcpTools": ["dl_context", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
+    { "name": "taphelu-dev", "path": "agents/taphelu-dev.md", "requiredSkills": ["taphelu-core", "taphelu-workflow"], "mcpTools": ["dl_task_store", "dl_observe", "dl_checkpoint"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-qa", "path": "agents/taphelu-qa.md", "requiredSkills": ["taphelu-verify"], "mcpTools": ["dl_context", "dl_task_store", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
+    { "name": "taphelu-ux-analyst", "path": "agents/taphelu-ux-analyst.md", "requiredSkills": ["taphelu-workflow"], "mcpTools": ["dl_context", "dl_task_store", "dl_observe"], "canDelegate": false, "closeoutGate": false },
+    { "name": "taphelu-visual-qa", "path": "agents/taphelu-visual-qa.md", "requiredSkills": ["taphelu-browser", "taphelu-verify"], "mcpTools": ["dl_context", "dl_task_store", "dl_checkpoint"], "canDelegate": false, "closeoutGate": true },
     { "name": "taphelu-memory-curator", "path": "agents/taphelu-memory-curator.md", "requiredSkills": ["taphelu-memory"], "mcpTools": ["dl_observe", "dl_memory_promote", "dl_memory_search"], "canDelegate": false, "closeoutGate": false },
     { "name": "taphelu-context-curator", "path": "agents/taphelu-context-curator.md", "requiredSkills": ["taphelu-context"], "mcpTools": ["dl_context_store", "dl_cleanup_context"], "canDelegate": false, "closeoutGate": false },
     { "name": "taphelu-workflow-adapter", "path": "agents/taphelu-workflow-adapter.md", "requiredSkills": ["taphelu-adapters", "taphelu-workflow"], "mcpTools": ["dl_scan_project", "dl_contracts", "dl_context_store"], "canDelegate": false, "closeoutGate": false }

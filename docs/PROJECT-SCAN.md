@@ -84,7 +84,7 @@ With `--write`, Taphelu writes `.projects/DOMAIN.md` and appends `domain_context
 
 `dl scan` must stay bounded. If the repo is large, multi-package, or the scan is truncated by mode limits, the scan report includes `## Auto Batch Scan Plan` with per-batch task packets and parallel groups.
 
-With `--write`, Taphelu writes `.projects/CODEBASE.md` and also `.projects/SCAN-PLAN.md` for the generated batch plan. Agents should execute those packets by parallel group and merge compact summaries instead of reading the whole repo in one pass.
+With `--write`, Taphelu writes `.projects/CODEBASE.md`, `.projects/SCAN-PLAN.md`, and structured task artifacts under `.projects/plans/**` for the generated batch plan. Agents should execute those task ids by parallel group and merge compact summaries instead of reading the whole repo in one pass.
 
 ## Deep Scan Plan
 
@@ -95,7 +95,7 @@ dl scan plan --path . --mode standard
 ```
 
 The plan creates task packets for stack, architecture, testing, infra, domain, and concerns.
-When API/service signals exist, it adds `services-contracts`. With `--write`, Taphelu writes `.projects/SCAN-PLAN.md`, updates `.projects/STATE.md`, and appends `scan_plan_created`.
+When API/service signals exist, it adds `services-contracts`. With `--write`, Taphelu writes `.projects/SCAN-PLAN.md`, creates structured task artifacts under `.projects/plans/**`, updates `.projects/STATE.md`, and appends `scan_plan_created`.
 
 ## Service Topology Map
 

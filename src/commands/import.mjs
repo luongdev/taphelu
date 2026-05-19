@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { EVENT_TYPES } from "../constants.mjs";
 import { parseArgs } from "../args.mjs";
 import { appendEvent, timestampForId } from "../events.mjs";
@@ -8,6 +8,7 @@ import { formatList, escapeTable, replaceSection } from "../utils.mjs";
 import { memoryBullets } from "./memory.mjs";
 import { fail } from "../errors.mjs";
 import { analyzeProjectScan, applyProjectScan, buildProjectScanReport } from "./scan.mjs";
+import { analyzeStructuredPlanCreate, applyStructuredPlanCreate, nextMilestoneId } from "../task-store.mjs";
 
 export function runImport(root, rawArgs) {
   const [subcommand, ...rest] = rawArgs;
@@ -122,6 +123,9 @@ function runImportBmad(root, rawArgs) {
         applyBmadContinuation(root, report);
       }
     });
+    if (report.nextRoute !== "blocked" && report.stories.length) {
+      applyBmadStoriesToTaskStore(root, report);
+    }
   }
 }
 
@@ -418,6 +422,37 @@ function applyBmadContinuation(root, report) {
   writeTextFileAtomic(memoryPath, memory);
 }
 
+function applyBmadStoriesToTaskStore(root, report) {
+  const storyTasks = report.stories.slice(0, 20).map((relativePath, index) => {
+    const absolute = resolve(root, relativePath);
+    const content = pathInsideRoot(root, absolute) && existsSync(absolute) ? readFileSync(absolute, "utf8") : "";
+    return {
+      id: `T${String(index + 1).padStart(2, "0")}`,
+      objective: heading(content) || `Continue BMAD story ${basename(relativePath)}`,
+      verification: firstAcceptanceCriterion(content) || "Story acceptance criteria are satisfied.",
+      testability: "integration",
+      requiredEvidence: "BMAD story AC reviewed with implementation evidence.",
+      owner: "taphelu-dev",
+      boundary: "business",
+      references: [relativePath],
+      sourceExcerpt: content.split(/\r?\n/).slice(0, 30).join("\n"),
+    };
+  });
+  const plan = analyzeStructuredPlanCreate(root, {
+    goal: `Continue BMAD-imported plan from ${report.importPath}.`,
+    milestone: nextMilestoneId(root),
+    story: "S01",
+    references: report.stories,
+    tasks: storyTasks,
+  });
+  applyStructuredPlanCreate(root, plan);
+}
+
+function pathInsideRoot(root, absolutePath) {
+  const rel = relative(resolve(root), absolutePath);
+  return !rel.startsWith("..") && !isAbsolute(rel);
+}
+
 function applyKnownWorkflowContinuation(root, report, spec) {
   const statePath = join(root, ".projects", "STATE.md");
   if (existsSync(statePath)) {
@@ -474,6 +509,15 @@ function summarizeArtifact(markdown) {
   const bullet = lines.find((line) => line.startsWith("- "));
   const plain = lines.find((line) => !line.startsWith("#") && !line.startsWith("- "));
   return cleanImportLine(heading || bullet || plain || "No summary extracted.");
+}
+
+function heading(markdown) {
+  return cleanImportLine(markdown.match(/^#\s+(.+?)\s*$/m)?.[1] || "");
+}
+
+function firstAcceptanceCriterion(markdown) {
+  const ac = markdown.match(/##\s+Acceptance Criteria([\s\S]*?)(?:\n##\s+|$)/i)?.[1] || "";
+  return cleanImportLine(ac.match(/^\s*[-*]\s+(.+?)\s*$/m)?.[1] || "");
 }
 
 function cleanImportLine(line) {

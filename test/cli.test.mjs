@@ -10,6 +10,7 @@ import { appendEvent } from "../src/events.mjs";
 import { callTapheluTool, listTapheluTools } from "../src/mcp/tools.mjs";
 import { handleMcpMessage } from "../src/mcp/server.mjs";
 import { applyInstallPlan, buildInstallPlan, loadPack } from "../src/pack/adapter.mjs";
+import { applyProjectScan } from "../src/commands/scan.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(repoRoot, "bin", "dl.mjs");
@@ -226,6 +227,10 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`cleanup`/);
   assert.match(result.stdout, /`context`/);
   assert.match(result.stdout, /`compact`/);
+  assert.match(result.stdout, /`task`/);
+  assert.match(result.stdout, /`dev`/);
+  assert.match(result.stdout, /`qa`/);
+  assert.match(result.stdout, /`ux`/);
   assert.match(result.stdout, /`config`/);
 });
 
@@ -270,6 +275,7 @@ test("mcp lists taphelu agent lifecycle tools", async () => {
   assert.ok(direct.includes("dl_close"));
   assert.ok(direct.includes("dl_cleanup_context"));
   assert.ok(direct.includes("dl_context_store"));
+  assert.ok(direct.includes("dl_task_store"));
   assert.ok(direct.includes("dl_scan_project"));
   assert.ok(direct.includes("dl_contracts"));
   assert.equal(direct.includes("taphelu_start"), false);
@@ -313,6 +319,11 @@ test("mcp tool schemas expose handler-supported fields", () => {
   assert.ok(tools.dl_cleanup_context.inputSchema.properties.write);
   assert.ok(tools.dl_context_store.inputSchema.properties.action);
   assert.ok(tools.dl_context_store.inputSchema.properties.kind);
+  assert.ok(tools.dl_task_store.inputSchema.properties.action);
+  assert.ok(tools.dl_task_store.inputSchema.properties.task_id);
+  for (const field of ["constraint", "non_goal", "assumption", "risk", "approval_gate", "testing_strictness"]) {
+    assert.ok(tools.dl_task_store.inputSchema.properties[field], `dl_task_store missing ${field}`);
+  }
   assert.ok(tools.dl_scan_project.inputSchema.properties.mode);
   assert.ok(tools.dl_scan_project.inputSchema.properties.action);
   assert.ok(tools.dl_scan_project.inputSchema.properties.focus);
@@ -1463,15 +1474,30 @@ test("git-submodule context store validates git path before writing", () => {
 test("mcp context store indexes, searches, gets, and previews compaction", () => {
   const root = makeProject();
   writeFileSync(join(root, ".projects", "ROADMAP.md"), "# Roadmap\n\nMCP context store artifact.\n");
+  callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "plan_create",
+    milestone: "M32",
+    story: "S01",
+    goal: "Index structured tasks.",
+    task: ["Expose task artifact pointers."],
+    write: true,
+  });
+  const taskPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.md");
+  writeFileSync(taskPath, readFileSync(taskPath, "utf8").replaceAll("\n", "\r\n"));
   const indexed = callTapheluTool("dl_context_store", { cwd: root, action: "index", write: true });
   const searched = callTapheluTool("dl_context_store", { cwd: root, action: "search", query: "MCP context" });
+  const taskSearch = callTapheluTool("dl_context_store", { cwd: root, action: "search", query: "M32-S01-T01" });
   const got = callTapheluTool("dl_context_store", { cwd: root, action: "get", id: "roadmap:roadmap-md" });
   const ranged = callTapheluTool("dl_context_store", { cwd: root, action: "get", id: "roadmap:roadmap-md", start_line: 3, end_line: 3 });
   const compact = callTapheluTool("dl_context_store", { cwd: root, action: "compact", kind: "milestone", id: "M24" });
   const context = callTapheluTool("dl_context", { cwd: root });
+  const artifactIndex = JSON.parse(readFileSync(join(root, ".projects", "index.json"), "utf8"));
 
   assert.equal(indexed.wrote, true);
   assert.ok(searched.report.results.some((artifact) => artifact.id === "roadmap:roadmap-md"));
+  assert.ok(taskSearch.report.results.some((artifact) => artifact.id === "task:M32-S01-T01"));
+  assert.doesNotMatch(artifactIndex.artifacts.find((artifact) => artifact.id === "task:M32-S01-T01").summary, /schemaVersion/);
   assert.match(got.report.content, /MCP context store artifact/);
   assert.equal(ranged.report.lineRange.start, 3);
   assert.equal(compact.wrote, false);
@@ -1614,6 +1640,307 @@ test("plan applies deep testing strictness to changed logic", () => {
   assert.match(result.stdout, /`deep`/);
   assert.match(result.stdout, /unit/);
   assert.match(result.stdout, /Deep strictness/);
+});
+
+test("plan create writes structured store and generated summary", () => {
+  const root = makeProject();
+  const result = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Add structured task store.",
+    "--verification",
+    "Task commands work against the store.",
+    "--owner",
+    "taphelu-dev",
+    "--boundary",
+    "backend",
+    "--testability",
+    "integration",
+    "--write",
+    "Build structured plan storage.",
+  ]);
+  const taskMarkdown = readFileSync(join(root, ".projects", "plans", "tasks", "M32-S01-T01.md"), "utf8");
+  const summary = readFileSync(join(root, ".projects", "PLAN.md"), "utf8");
+  const index = JSON.parse(readFileSync(join(root, ".projects", "plans", "index.json"), "utf8"));
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(taskMarkdown, /id: M32-S01-T01/);
+  assert.match(taskMarkdown, /storyId: M32-S01/);
+  assert.match(taskMarkdown, /Task commands work against the store\./);
+  assert.match(summary, /Source of truth: `\.projects\/plans\/`/);
+  assert.equal(index.tasks.some((item) => item.id === "M32-S01-T01"), true);
+});
+
+test("task commands and role packets use task id context", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Implement task packets.",
+    "--verification",
+    "Dev, QA, and UX packets include bounded context.",
+    "--write",
+    "Build packet commands.",
+  ]);
+  const list = run(root, ["task", "list", "--milestone", "M32"]);
+  const show = run(root, ["task", "show", "M32-S01-T01", "--json"]);
+  const showLower = run(root, ["task", "show", "m32-s01-t01"]);
+  const status = run(root, ["task", "status", "M32-S01-T01", "--set", "in_progress"]);
+  const dev = run(root, ["dev", "implement", "M32-S01-T01"]);
+  const qa = run(root, ["qa", "review", "M32-S01-T01"]);
+  const ux = run(root, ["ux", "verify", "M32-S01-T01"]);
+  const packet = JSON.parse(show.stdout);
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(list.status, 0, list.stderr);
+  assert.match(list.stdout, /M32-S01-T01/);
+  assert.equal(show.status, 0, show.stderr);
+  assert.equal(packet.task.id, "M32-S01-T01");
+  assert.equal(showLower.status, 0, showLower.stderr);
+  assert.match(showLower.stdout, /# Task M32-S01-T01/);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /in_progress/);
+  assert.match(dev.stdout, /# Dev Packet: M32-S01-T01/);
+  assert.match(qa.stdout, /## Required Evidence/);
+  assert.match(ux.stdout, /# UX Packet: M32-S01-T01/);
+});
+
+test("task show rejects invalid ids before filesystem reads", () => {
+  const root = makeProject();
+  const result = run(root, ["task", "show", "../../package"]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Invalid task id/);
+});
+
+test("plan create removes obsolete task files for the same story", () => {
+  const root = makeProject();
+  const first = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Task one.",
+    "--task",
+    "Task two.",
+    "--write",
+    "Create two tasks.",
+  ]);
+  const second = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Task one changed.",
+    "--write",
+    "Create one task.",
+  ]);
+  const tasks = readdirSync(join(root, ".projects", "plans", "tasks")).filter((name) => name.endsWith(".md"));
+
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(tasks, ["M32-S01-T01.md"]);
+});
+
+test("plan validate catches missing evidence and plan render is deterministic", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Validate plan store.",
+    "--write",
+    "Build validation.",
+  ]);
+  const taskPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.md");
+  const task = readFileSync(taskPath, "utf8");
+  writeFileSync(taskPath, task.replace(/## Required Evidence\n\n[\s\S]*?\n\n## Test Effort Reason/, "## Required Evidence\n\n- None.\n\n## Test Effort Reason"));
+  const validate = run(root, ["task", "validate", "M32-S01-T01"]);
+  const render = run(root, ["plan", "render", "--milestone", "M32"]);
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(validate.status, 0, validate.stderr);
+  assert.match(validate.stdout, /`FAIL`/);
+  assert.match(validate.stdout, /Missing required evidence/);
+  assert.equal(render.status, 0, render.stderr);
+  assert.match(render.stdout, /# Plan: M32/);
+});
+
+test("plan validate reports malformed task markdown instead of crashing", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Validate malformed task handling.",
+    "--write",
+    "Build malformed validation.",
+  ]);
+  writeFileSync(join(root, ".projects", "plans", "tasks", "M32-S01-T01.md"), "bad task markdown\n");
+  const validate = run(root, ["plan", "validate", "--milestone", "M32"]);
+  const show = run(root, ["task", "show", "M32-S01-T01"]);
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(validate.status, 0, validate.stderr);
+  assert.match(validate.stdout, /`FAIL`/);
+  assert.match(validate.stdout, /Malformed plan artifact/);
+  assert.equal(show.status, 1);
+  assert.match(show.stderr, /Malformed task file/);
+});
+
+test("task validation catches parent id mismatches", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Validate parent ids.",
+    "--write",
+    "Build id validation.",
+  ]);
+  const taskPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.md");
+  const task = readFileSync(taskPath, "utf8");
+  writeFileSync(taskPath, task.replace("storyId: M32-S01", "storyId: M32-S02"));
+  const validate = run(root, ["plan", "validate", "--milestone", "M32"]);
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(validate.status, 0, validate.stderr);
+  assert.match(validate.stdout, /Task id does not match story id/);
+});
+
+test("task markdown parser preserves multiline text and CRLF frontmatter on status write", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Preserve markdown edits.",
+    "--write",
+    "Build markdown preservation.",
+  ]);
+  const taskPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.md");
+  const task = readFileSync(taskPath, "utf8")
+    .replace("## Dev Instructions\n\n- Implement M32-S01-T01 only. Do not broaden scope.", "## Dev Instructions\n\nRead this paragraph before coding.\nKeep the user's manual context.\n\n- Then implement the bounded change.\n  - Include this nested continuation line.")
+    .replace(/\n$/, "\n## Implementation Notes\n\nKeep this custom section intact.\n")
+    .replaceAll("\n", "\r\n");
+  writeFileSync(taskPath, task);
+  const status = run(root, ["task", "status", "M32-S01-T01", "--set", "in_progress"]);
+  const packet = run(root, ["dev", "implement", "M32-S01-T01"]);
+  const persisted = readFileSync(taskPath, "utf8");
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(packet.stdout, /Read this paragraph before coding\./);
+  assert.match(packet.stdout, /Keep the user's manual context\./);
+  assert.match(packet.stdout, /Include this nested continuation line\./);
+  assert.match(persisted, /## Implementation Notes/);
+  assert.match(persisted, /Keep this custom section intact\./);
+});
+
+test("task status migrates legacy json task artifact to markdown", () => {
+  const root = makeProject();
+  const created = run(root, [
+    "plan",
+    "create",
+    "--milestone",
+    "M32",
+    "--story",
+    "S01",
+    "--task",
+    "Migrate legacy task.",
+    "--write",
+    "Build legacy migration.",
+  ]);
+  const mdPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.md");
+  const legacyPath = join(root, ".projects", "plans", "tasks", "M32-S01-T01.json");
+  writeFileSync(legacyPath, `${JSON.stringify({
+    id: "M32-S01-T01",
+    story_id: "M32-S01",
+    title: "Legacy snake task",
+    objective: "Migrate legacy task.",
+    status: "ready",
+    acceptance_criteria: ["Keep snake AC."],
+    required_evidence: ["Keep snake evidence."],
+    test_effort_reason: "Legacy reason.",
+    dev_instructions: ["Legacy dev note."],
+  }, null, 2)}\n`);
+  rmSync(mdPath, { force: true });
+  const status = run(root, ["task", "status", "M32-S01-T01", "--set", "in_progress"]);
+  const migrated = readFileSync(mdPath, "utf8");
+
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(status.status, 0, status.stderr);
+  assert.equal(existsSync(mdPath), true);
+  assert.equal(existsSync(legacyPath), false);
+  assert.match(migrated, /Keep snake AC\./);
+  assert.match(migrated, /Keep snake evidence\./);
+  assert.match(migrated, /Legacy dev note\./);
+});
+
+test("plan migrate converts legacy PLAN.md into structured artifacts", () => {
+  const root = makeProject();
+  writeFileSync(join(root, ".projects", "PLAN.md"), `# Legacy Plan
+
+## Goal
+
+Migrate a legacy plan.
+
+## Tasks
+
+- Preserve source references.
+
+## Verification Plan
+
+- Structured task exists.
+`);
+  const result = run(root, ["plan", "migrate", "--milestone", "M33", "--write"]);
+  const task = JSON.parse(run(root, ["task", "show", "M33-S01-T01", "--json"]).stdout).task;
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(task.references[0], ".projects/PLAN.md");
+  assert.equal(task.acceptanceCriteria[0], "Structured task exists.");
+});
+
+test("plan migrate rejects paths outside project root", () => {
+  const root = makeProject();
+  const outside = join(dirname(root), "outside-plan.md");
+  writeFileSync(outside, "# Outside\n");
+  const result = run(root, ["plan", "migrate", "--from", outside, "--milestone", "M34", "--write"]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Path must stay inside project root/);
 });
 
 test("verify reports a verdict from artifacts and tests", () => {
@@ -2285,6 +2612,53 @@ test("large scan emits and writes auto batch task list", () => {
   assert.match(state, /created .* batch packet/);
   assert.match(state, /SCAN-PLAN\.md/);
   assert.equal(existsSync(join(root, ".projects", "scans")), true);
+  assert.equal(existsSync(join(root, ".projects", "plans", "tasks", "M01-S01-T01.md")), true);
+});
+
+test("large scan write rolls back scan artifacts if task store write fails", () => {
+  const root = makePlainRepo();
+  mkdirSync(join(root, ".projects"), { recursive: true });
+  writeFileSync(join(root, ".projects", "PROJECT.md"), "# Existing\n");
+  writeFileSync(join(root, ".projects", "STATE.md"), "# Existing State\n");
+  writeFileSync(join(root, ".projects", "events.jsonl"), "");
+  writeFileSync(join(root, ".projects", "plans"), "blocking file\n");
+
+  assert.throws(() => applyProjectScan(root, {
+    mode: "quick",
+    scanPath: ".",
+    truncated: false,
+    ignoreFiles: [],
+    fileCount: 1,
+    topLevelDirs: ["src"],
+    packageFiles: ["package.json"],
+    docs: ["README.md"],
+    entrypoints: ["src/index.js"],
+    languages: { JavaScript: 1 },
+    scripts: {},
+    testCommands: [],
+    stack: ["Node.js"],
+    serviceSignals: [],
+    confidence: "medium",
+    openQuestions: [],
+    largeRepo: true,
+    nextRoute: "execute_scan_batches",
+    batchTasks: [{
+      id: "B1",
+      focusArea: "stack",
+      ownerRole: "taphelu-analyst",
+      boundary: "artifact",
+      dependsOn: [],
+      objective: "Collect stack evidence.",
+      evidenceToCollect: ["package files"],
+      outputArtifact: "scans/stack.md",
+      testability: "artifact-check",
+      parallelGroup: 1,
+    }],
+  }), /EEXIST|ENOTDIR|not a directory/);
+
+  assert.equal(existsSync(join(root, ".projects", "CODEBASE.md")), false);
+  assert.equal(existsSync(join(root, ".projects", "SCAN-PLAN.md")), false);
+  assert.equal(readFileSync(join(root, ".projects", "PROJECT.md"), "utf8"), "# Existing\n");
 });
 
 test("large scan records remaining directory batch instead of silently omitting dirs", () => {
@@ -2371,7 +2745,9 @@ test("scan plan write creates scan plan and updates state", () => {
   assert.match(plan, /# Deep Scan Plan/);
   assert.match(state, /Deep scan plan created/);
   assert.equal(existsSync(join(root, ".projects", "PROJECT.md")), true);
-  assert.equal(events.at(-1).type, "scan_plan_created");
+  assert.equal(events.some((event) => event.type === "scan_plan_created"), true);
+  assert.equal(events.some((event) => event.type === "structured_plan_created"), true);
+  assert.equal(existsSync(join(root, ".projects", "plans", "tasks", "M01-S01-T01.md")), true);
 });
 
 test("large repo scan plan recommends parallel deep scan", () => {
@@ -2934,6 +3310,72 @@ test("mcp scan project supports interview and plan actions", () => {
   assert.ok(plan.report.tasks.some((task) => task.focusArea === "stack"));
 });
 
+test("mcp task store creates tasks and returns role packets", () => {
+  const root = makeProject();
+  const created = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "plan_create",
+    milestone: "M32",
+    story: "S01",
+    goal: "Build task store MCP.",
+    task: ["Add dl_task_store."],
+    verification: ["MCP task packet works."],
+    write: true,
+  });
+  const get = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "task_get",
+    task_id: "M32-S01-T01",
+  });
+  const preview = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "task_status",
+    task_id: "M32-S01-T01",
+    set: "in_progress",
+  });
+  const afterPreview = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "task_get",
+    task_id: "M32-S01-T01",
+  });
+  const list = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "task_list",
+    milestone: "M32",
+  });
+  const fullGet = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "task_get",
+    task_id: "M32-S01-T01",
+    json: true,
+  });
+  const written = callTapheluTool("taphelu_task_store", {
+    cwd: root,
+    action: "task_status",
+    task_id: "M32-S01-T01",
+    set: "in_progress",
+    write: true,
+  });
+  const dev = callTapheluTool("dl_task_store", {
+    cwd: root,
+    action: "dev_packet",
+    task_id: "M32-S01-T01",
+  });
+
+  assert.equal(created.wrote, true);
+  assert.equal(created.report.summary, undefined);
+  assert.equal(created.report.tasks[0].devRecord, undefined);
+  assert.equal(get.report.task.id, "M32-S01-T01");
+  assert.equal(get.report.task.devRecord, undefined);
+  assert.match(get.report.summary, /# Task M32-S01-T01/);
+  assert.equal(list.report.tasks[0].devRecord, undefined);
+  assert.equal(fullGet.report.task.devRecord instanceof Object, true);
+  assert.equal(preview.wrote, false);
+  assert.equal(afterPreview.report.task.status, "ready");
+  assert.equal(written.wrote, true);
+  assert.match(dev.packet, /# Dev Packet: M32-S01-T01/);
+});
+
 test("mcp scan project supports map action and legacy alias", () => {
   const root = makePlainRepo();
   writeFileSync(join(root, "openapi.yaml"), "openapi: 3.0.0\ninfo:\n  title: API\n  version: 1.0.0\npaths: {}\n");
@@ -2986,7 +3428,9 @@ test("import bmad write updates continuation state and memory", () => {
   assert.match(state, /Continue BMAD-imported plan/);
   assert.match(state, /Run `dl plan` against the imported BMAD continuation summary/);
   assert.match(memory, /BMAD import source: _bmad-output/);
-  assert.equal(events.at(-1).type, "bmad_imported");
+  assert.equal(events.some((event) => event.type === "bmad_imported"), true);
+  assert.equal(events.some((event) => event.type === "structured_plan_created"), true);
+  assert.equal(existsSync(join(root, ".projects", "plans", "tasks", "M01-S01-T01.md")), true);
 });
 
 test("import gsd write updates continuation state and memory", () => {
