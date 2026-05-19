@@ -5,7 +5,7 @@ Use this guide to test `@luongdev/taphelu` in a real repository.
 Current npm test build:
 
 ```bash
-@luongdev/taphelu@0.1.0-build.1
+@luongdev/taphelu@0.1.0-build.2
 ```
 
 ## Prerequisites
@@ -27,7 +27,7 @@ npm -v
 Install the latest published test build:
 
 ```bash
-npm install -g @luongdev/taphelu@0.1.0-build.1
+npm install -g @luongdev/taphelu@0.1.0-build.2
 dl commands
 ```
 
@@ -40,7 +40,7 @@ command -v dl
 
 ## Basic Project Onboarding
 
-Run these commands from the repository you want to test:
+Manual CLI smoke path:
 
 ```bash
 cd <repo-can-test>
@@ -50,6 +50,14 @@ dl scan plan --path .
 ```
 
 These commands should print reports and should not write project files unless you pass `--write`.
+
+Agent-native path after runtime install:
+
+```text
+Use Taphelu to onboard this repo. Run a quick scan, ask only missing domain/business questions, then create a scan plan. Preview first; ask before writing .projects.
+```
+
+The expected result is that the agent uses Taphelu MCP tools, asks the domain questions in chat, and writes only after approval.
 
 ## Runtime Adapter Test
 
@@ -158,3 +166,5 @@ Useful command for version evidence:
 npm view @luongdev/taphelu version
 dl commands | head -20
 ```
+
+For fuller usage examples, see [Usage Guide](USAGE.md).

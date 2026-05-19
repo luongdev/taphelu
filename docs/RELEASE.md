@@ -37,6 +37,7 @@ Confirm the dry-run tarball includes:
 - `scripts/`
 - `taphelu-pack/`
 - `docs/`
+- `docs/USAGE.md`
 
 Confirm the dry-run tarball excludes:
 
@@ -93,7 +94,7 @@ Only after manual approval:
 ```bash
 npm login
 npm whoami
-npm publish --access public
+npm publish --access public --otp <code>
 ```
 
 ## Post-Publish Smoke

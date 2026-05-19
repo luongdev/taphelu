@@ -44,13 +44,30 @@ It does not store raw source dumps in memory.
 
 ## Domain Interview
 
-Run a quick scan before asking business questions:
+Preferred path: let the AI agent run scan/interview through MCP, then ask the user the generated questions conversationally.
+
+Prompt example:
+
+```text
+Use Taphelu to onboard this repo. Run a quick scan, ask only missing domain/business questions, then save the domain context after I answer.
+```
+
+Expected agent calls:
+
+- `dl_scan_project` with `action=scan`, `write=false`
+- `dl_scan_project` with `action=interview`, `write=false`
+- ask the generated questions in chat
+- `dl_scan_project` with `action=interview`, answer fields, `write=true` after approval
+
+CLI preview fallback:
 
 ```bash
 dl scan interview --path . --mode quick
 ```
 
-The interview prints 3-7 questions tied to missing repo evidence. Record answers non-interactively:
+The interview prints 3-7 questions tied to missing repo evidence.
+
+Non-interactive scripting form:
 
 ```bash
 dl scan interview \
@@ -61,7 +78,7 @@ dl scan interview \
   --write
 ```
 
-With `--write`, Taphelu writes `.projects/DOMAIN.md` and appends `domain_context_recorded`.
+With `--write`, Taphelu writes `.projects/DOMAIN.md` and appends `domain_context_recorded`. This flag-heavy form is for scripts and tests, not the normal human UX.
 
 ## Deep Scan Plan
 

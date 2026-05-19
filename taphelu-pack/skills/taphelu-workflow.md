@@ -13,7 +13,7 @@ Use the CLI primitives when MCP is unavailable or when a human-readable packet i
 - `dl run` for end-to-end packet assembly.
 - `dl config get testing.strictness` to load project test strictness.
 - `dl scan --mode quick` before planning inside an existing un-mapped repo.
-- `dl scan interview` before asking broad domain questions.
+- `dl_scan_project action=interview` before asking broad domain questions; ask the generated questions in chat instead of making the user type long CLI flags.
 - `dl scan plan` before deep analysis of large or unfamiliar codebases.
 - `dl scan map` after `dl scan plan` when service/API signals exist.
 

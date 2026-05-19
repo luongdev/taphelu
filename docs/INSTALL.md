@@ -9,7 +9,7 @@ npm install -g @luongdev/taphelu
 Current npm test build:
 
 ```bash
-0.1.0-build.1
+0.1.0-build.2
 ```
 
 Before publish, install from a local tarball:
@@ -31,6 +31,7 @@ taphelu-mcp
 Beta testing:
 
 - See [Beta Test Guide](BETA-TEST.md) for the recommended real-project smoke path and feedback template.
+- See [Usage Guide](USAGE.md) for detailed CLI, MCP, runtime adapter, memory, context, and troubleshooting workflows.
 
 Taphelu install is generated from `taphelu-pack`.
 

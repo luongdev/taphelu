@@ -11,7 +11,7 @@ It gives AI agents and humans a shared project workflow through:
 
 ## Status
 
-Taphelu is early v0.1 software. The current published test build is `0.1.0-build.1`. The current focus is local CLI/MCP usage and beta feedback. Do not expect cloud sync, hosted execution, or a web UI yet.
+Taphelu is early v0.1 software. The current test build is `0.1.0-build.2`. The current focus is local CLI/MCP usage and beta feedback. Do not expect cloud sync, hosted execution, or a web UI yet.
 
 ## Requirements
 
@@ -41,7 +41,19 @@ Inspect available commands:
 dl commands
 ```
 
-Scan an existing project without writing anything:
+Read the detailed workflow guide:
+
+```bash
+open docs/USAGE.md
+```
+
+Recommended agent-native start after runtime install:
+
+```text
+Use Taphelu to onboard this repo. Scan it first, ask me only missing domain/business questions, then create a scan plan. Preview first; ask before writing .projects.
+```
+
+CLI fallback for inspecting what the agent would call:
 
 ```bash
 dl scan --path . --mode quick
@@ -89,7 +101,7 @@ For real-project test instructions and feedback format, see [Beta Test Guide](do
 Recommended first pass:
 
 ```bash
-npm install -g @luongdev/taphelu@0.1.0-build.1
+npm install -g @luongdev/taphelu@0.1.0-build.2
 cd <repo-can-test>
 dl scan --path . --mode quick
 dl scan interview --path .
@@ -124,6 +136,7 @@ dl doctor --runtime claude --scope global --live
 ## Documentation
 
 - [Install](docs/INSTALL.md)
+- [Usage Guide](docs/USAGE.md)
 - [Beta Test Guide](docs/BETA-TEST.md)
 - [MCP Integration](docs/MCP-INTEGRATION.md)
 - [Agent Pack](docs/AGENT-PACK.md)

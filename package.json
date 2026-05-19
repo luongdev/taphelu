@@ -36,8 +36,8 @@
     "node": ">=22.16.0"
   },
   "bin": {
-    "dl": "./bin/dl.mjs",
-    "taphelu-mcp": "./bin/taphelu-mcp.mjs"
+    "dl": "bin/dl.mjs",
+    "taphelu-mcp": "bin/taphelu-mcp.mjs"
   },
   "scripts": {
     "dl": "node ./bin/dl.mjs",
