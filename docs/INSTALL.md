@@ -9,7 +9,7 @@ pnpm add -g @luongdev/taphelu
 Current stable release:
 
 ```bash
-0.1.1
+0.1.2
 ```
 
 For source checkout testing, install from a local tarball:

@@ -3,13 +3,11 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpat
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs, parseMode } from "../args.mjs";
 import { EVENT_TYPES } from "../constants.mjs";
-import { appendEvent, timestampForId } from "../events.mjs";
 import { fail } from "../errors.mjs";
-import { readProjectFile, relativeProjectPath, writeTextFileAtomic } from "../project.mjs";
-import { replaceSection } from "../utils.mjs";
+import { relativeProjectPath, writeTextFileAtomic } from "../project.mjs";
 import { analyzeServiceTopology } from "./scan.mjs";
 
-const DEFAULT_CONTRACTS_PATH = ".taphelu/contracts";
+const DEFAULT_CONTRACTS_PATH = ".projects/contracts";
 const REGISTRY_VERSION = 1;
 const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_INTERACTION_SCAN_BYTES = 1024 * 1024;
@@ -106,7 +104,7 @@ export function analyzeContractsInit(root, input = {}) {
     exists,
     layout: CONTRACT_DIRS.map((name) => `${relativeProjectPath(root, path)}/${name}`),
     operations: [
-      exists ? "validate existing contract registry layout" : remote ? `git submodule add ${remote} ${relativeProjectPath(root, path)}` : "create local contract registry directory",
+      exists ? "validate existing contract registry layout" : remote ? `git clone ${remote} ${relativeProjectPath(root, path)}` : "create local contract registry directory",
       "create registry.json, services/, contract family directories, graphs/, README.md",
     ],
     nextRoute: "write_optional",
@@ -115,17 +113,18 @@ export function analyzeContractsInit(root, input = {}) {
 
 export function applyContractsInit(root, report) {
   if (report.remote && !report.exists) {
-    const result = spawnSync("git", ["submodule", "add", report.remote, report.path], {
+    mkdirSync(dirname(report.absolutePath), { recursive: true });
+    const result = spawnSync("git", ["clone", "--", report.remote, report.absolutePath], {
       cwd: root,
       encoding: "utf8",
     });
-    if (result.status !== 0) fail(`git submodule add failed: ${(result.stderr || result.stdout || "").trim()}`);
+    if (result.status !== 0) fail(`git clone failed: ${(result.stderr || result.stdout || "").trim()}`);
   }
   ensureContractLayout(report.absolutePath);
   writeRegistryIfMissing(report.absolutePath);
   writeReadmeIfMissing(report.absolutePath);
   writeGitignoreIfMissing(report.absolutePath);
-  appendContractsEvent(root, EVENT_TYPES.CONTRACTS_INITIALIZED, "Contract registry initialized.", {
+  appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_INITIALIZED, "Contract registry initialized.", {
     path: report.path,
     remote: report.remote || "",
   });
@@ -150,22 +149,10 @@ export function analyzeContractsLink(root, input = {}) {
 
 export function applyContractsLink(root, report) {
   if (!report.exists) fail(`Contracts path not found: ${report.path}`);
-  ensureProjectFiles(root);
-  const content = `# Contract Registry
-
-## Source
-
-- Path: \`${report.path}\`
-- Git: ${report.git.kind}${report.git.root ? ` at \`${report.git.root}\`` : ""}
-
-## Agent Policy
-
-- For polyrepo work, run \`dl contracts check --strict\`, \`dl contracts current --path .\`, and \`dl contracts deps --direction all\` before planning.
-- If contract registry and service implementation disagree, stop and ask for resolution.
-- Prefer registry interactions over implementation inference when strict check passes.
-`;
-  writeTextFileAtomic(join(root, ".projects", "CONTRACTS.md"), content);
-  appendContractsEvent(root, EVENT_TYPES.CONTRACTS_LINKED, "Contract registry linked into project context.", {
+  ensureContractLayout(report.absolutePath);
+  writeReadmeIfMissing(report.absolutePath);
+  writeGitignoreIfMissing(report.absolutePath);
+  appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_LINKED, "Contract registry linked.", {
     path: report.path,
     git: report.git.kind,
   });
@@ -223,8 +210,7 @@ export function applyContractsScan(root, report) {
     writeRegistry(report.absolutePath, report.registry);
     writeContractGraph(report.absolutePath, report.graph);
   });
-  updateProjectContractsSection(root, report);
-  appendContractsEvent(root, EVENT_TYPES.CONTRACTS_SCANNED, "Service interactions imported into shared contract registry.", {
+  appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_SCANNED, "Service interactions imported into shared contract registry.", {
     path: report.path,
     service_id: report.service.id,
     contract_count: report.service.contracts.length,
@@ -252,8 +238,7 @@ export function applyContractsMap(root, report) {
     writeGitignoreIfMissing(report.absolutePath);
     writeContractGraph(report.absolutePath, report.graph);
   });
-  updateProjectContractsSection(root, report);
-  appendContractsEvent(root, EVENT_TYPES.CONTRACTS_MAPPED, "Cross-repo service interaction graph generated.", {
+  appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_MAPPED, "Cross-repo service interaction graph generated.", {
     path: report.path,
     service_count: report.graph.services.length,
     contract_count: report.graph.contracts.length,
@@ -374,14 +359,14 @@ export function applyContractsSync(root, report) {
     runGit(report.absolutePath, ["add", "--", ...managedRegistryGitPaths()]);
     const afterAdd = gitStatus(report.absolutePath);
     if (afterAdd.changed) runGit(report.absolutePath, ["commit", "-m", "Update Taphelu contract registry"]);
-    appendContractsEvent(root, EVENT_TYPES.CONTRACTS_SYNCED, "Contract registry changes committed.", {
+    appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_SYNCED, "Contract registry changes committed.", {
       path: report.path,
       pushed: false,
     });
   }
   if (report.wantsPush) {
     runGit(report.absolutePath, ["push"]);
-    appendContractsEvent(root, EVENT_TYPES.CONTRACTS_SYNCED, "Contract registry changes pushed.", {
+    appendContractsEvent(report.absolutePath, EVENT_TYPES.CONTRACTS_SYNCED, "Contract registry changes pushed.", {
       path: report.path,
       pushed: true,
     });
@@ -411,7 +396,7 @@ ${formatList(report.layout.map((path) => `\`${path}\``))}
 
 ## Write Behavior
 
-${didWrite ? "- Wrote or validated the contract registry layout and appended `contracts_initialized`." : "- Preview only. Add `--write` to create the layout or add the submodule."}
+${didWrite ? "- Wrote or validated the contract registry layout and appended a registry-local `contracts_initialized` event." : "- Preview only. Add `--write` to create the layout or clone the remote registry inside `.projects`."}
 
 ## Next Route
 
@@ -432,7 +417,7 @@ export function buildContractsLinkReport(report, didWrite = false) {
 ${report.findings.length ? `## Findings\n\n${formatList(report.findings)}` : ""}
 ## Write Behavior
 
-${didWrite ? "- Wrote `.projects/CONTRACTS.md` and appended `contracts_linked`." : "- Preview only. Add `--write` to record this registry in project context."}
+${didWrite ? "- Validated the registry layout and wrote a registry-local event." : "- Preview only. Add `--write` to validate this registry path."}
 
 ## Next Route
 
@@ -643,6 +628,10 @@ function contractsPath(root, inputPath = DEFAULT_CONTRACTS_PATH) {
   const path = isAbsolute(value) ? resolve(value) : resolve(root, value);
   const rel = relative(root, path);
   if (rel.startsWith("..") || isAbsolute(rel)) fail(`Contracts path must stay inside the project root: ${value}`);
+  const normalized = rel.replaceAll("\\", "/");
+  if (!normalized.startsWith(".projects/")) {
+    fail(`Contracts path must stay under .projects/: ${value}`);
+  }
   return path;
 }
 
@@ -1642,34 +1631,14 @@ function runGit(path, args) {
   if (result.status !== 0) fail(`git ${args.join(" ")} failed: ${(result.stderr || result.stdout || "").trim()}`);
 }
 
-function appendContractsEvent(root, type, summary, data) {
-  ensureProjectFiles(root);
-  appendEvent(root, {
+function appendContractsEvent(registryRoot, type, summary, data) {
+  mkdirSync(registryRoot, { recursive: true });
+  writeFileSync(join(registryRoot, "events.jsonl"), `${JSON.stringify({
     ts: new Date().toISOString(),
     type,
-    run_id: `run-${timestampForId()}-contracts`,
     summary,
     data,
-  });
-}
-
-function ensureProjectFiles(root) {
-  mkdirSync(join(root, ".projects"), { recursive: true });
-  if (!existsSync(join(root, ".projects", "PROJECT.md"))) writeTextFileAtomic(join(root, ".projects", "PROJECT.md"), "# Project\n");
-  if (!existsSync(join(root, ".projects", "STATE.md"))) writeTextFileAtomic(join(root, ".projects", "STATE.md"), "# State\n");
-  if (!existsSync(join(root, ".projects", "MEMORY.md"))) writeTextFileAtomic(join(root, ".projects", "MEMORY.md"), "# Memory\n");
-  if (!existsSync(join(root, ".projects", "events.jsonl"))) writeFileSync(join(root, ".projects", "events.jsonl"), "");
-}
-
-function updateProjectContractsSection(root, report) {
-  ensureProjectFiles(root);
-  const current = readProjectFile(root, "PROJECT.md") || "# Project\n";
-  writeTextFileAtomic(join(root, ".projects", "PROJECT.md"), replaceSection(current, "Contract Registry", [
-    `- Registry path: \`${report.path}\`.`,
-    `- Services: ${report.graph?.services?.length || report.registry?.services?.length || 0}.`,
-    `- Interactions: ${report.graph?.interactions?.length || report.registry?.interactions?.length || 0}.`,
-    `- Source of truth for polyrepo service communication when checks pass.`,
-  ].join("\n")));
+  })}\n`, { flag: "a" });
 }
 
 function serviceId(value) {

@@ -4,8 +4,8 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, polyrepo contract registry v1, service interaction registry, and stable release `0.1.1`.
-- Current: stable `0.1.1` release validation, dogfood fixes, and validation of shared contract registries on real polyrepo systems.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, polyrepo contract registry v1, service interaction registry, and stable release `0.1.2`.
+- Current: stable `0.1.2` release validation, dogfood fixes, and validation of shared contract registries on real polyrepo systems.
 - Next: choose the next implementation milestone from repeated tester friction.
 - Later: richer graph/index features.
 
@@ -21,7 +21,7 @@ Includes:
 - Pack whitelist that includes `bin`, `src`, `scripts`, `taphelu-pack`, and `docs`.
 - README, LICENSE, install docs, and publish checklist.
 - Smoke tests for package pack, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
-- Current stable target: `@luongdev/taphelu@0.1.1`.
+- Current stable target: `@luongdev/taphelu@0.1.2`.
 
 Done when:
 
@@ -76,7 +76,7 @@ Includes:
 - Runtime install E2E for Codex, Claude, Gemini, and Kiro using temp homes/config dirs.
 - `dl doctor` validation for MCP config, generated adapter files, instruction hygiene, and package install health.
 - Runtime orchestration kit: skills, agents or role fallbacks, `/dl-*` commands, hooks, capability-based status surfaces, and live doctor.
-- Polyrepo service interaction registry: `.taphelu/contracts` layout, service metadata, protobuf/OpenAPI/AsyncAPI/GraphQL/schema support, Kafka/queue/topic/pubsub/Redis interaction metadata, graph artifacts, and gated git sync.
+- Polyrepo service interaction registry: `.projects/contracts` layout, service metadata, protobuf/OpenAPI/AsyncAPI/GraphQL/schema support, Kafka/queue/topic/pubsub/Redis interaction metadata, graph artifacts, and gated git sync.
 
 Done when:
 

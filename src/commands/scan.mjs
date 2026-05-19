@@ -1574,6 +1574,12 @@ function isDoc(path) {
 }
 
 function renderCodebaseArtifact(report) {
+  const languageRows = Object.entries(report.languages)
+    .map(([language, count]) => `| ${language} | ${count} |`)
+    .join("\n") || "| None | 0 |";
+  const scriptRows = Object.entries(report.scripts)
+    .map(([name, command]) => `| ${escapeTable(name)} | ${escapeTable(command)} |`)
+    .join("\n") || "| None | No package scripts detected. |";
   return `# Codebase Scan
 
 ## Summary
@@ -1582,6 +1588,10 @@ function renderCodebaseArtifact(report) {
 - Mode: \`${report.mode}\`
 - Files observed: ${report.fileCount}${report.truncated ? " (truncated)" : ""}
 - Confidence: \`${report.confidence}\`
+
+## Top-Level Directories
+
+${formatList(report.topLevelDirs, "No directories discovered.")}
 
 ## Stack
 
@@ -1594,6 +1604,18 @@ ${formatList(report.serviceSignals, "No service or API signals discovered.")}
 ## Package Files
 
 ${formatList(report.packageFiles, "No package files discovered.")}
+
+## Languages
+
+| Language | Files |
+|---|---:|
+${languageRows}
+
+## Scripts
+
+| Name | Command |
+|---|---|
+${scriptRows}
 
 ## Test Commands
 

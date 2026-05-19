@@ -10,7 +10,7 @@ Default flow:
 2. If strict check fails, stop and ask for conflict resolution before planning.
 3. Call `dl_contracts` with `action=current` to identify the current service.
 4. Call `dl_contracts` with `action=deps`, `direction=all` to load outbound dependencies and inbound dependents.
-5. If no registry exists, propose `dl contracts init --path .taphelu/contracts --remote <url>` and ask before `--write`.
+5. If no registry exists, propose `dl contracts init --path .projects/contracts --remote <url>` and ask before `--write`.
 6. To import this repo, call `dl_contracts` with `action=scan`, `path="."`, `write=false`.
 7. Only after approval, call `dl_contracts` with `action=scan`, `write=true`.
 8. Use `action=map` to refresh cross-repo topology.

@@ -119,14 +119,14 @@ export const TAPHELU_MCP_TOOLS = [
   tool("dl_contracts", "Manage a shared polyrepo service interaction registry with preview-first init, link, scan, map, check, current, deps, and gated git sync.", {
     cwd: stringSchema("Workspace directory. Defaults to server cwd."),
     action: stringSchema("Action: init, link, scan, map, check, current, deps, or sync. Defaults to check."),
-    path: stringSchema("Registry path for init/link/map/check/sync, or service scan path for action=scan/current/deps. Defaults to .taphelu/contracts for registry actions and . for service actions."),
-    contracts_path: stringSchema("Registry path for action=scan/current/deps. Defaults to .taphelu/contracts."),
-    remote: stringSchema("Remote URL for action=init when adding a submodule."),
+    path: stringSchema("Registry path for init/link/map/check/sync, or service scan path for action=scan/current/deps. Defaults to .projects/contracts for registry actions and . for service actions."),
+    contracts_path: stringSchema("Registry path for action=scan/current/deps. Defaults to .projects/contracts."),
+    remote: stringSchema("Remote URL for action=init when cloning the registry under .projects/contracts."),
     mode: stringSchema("Service scan mode for action=scan: quick, standard, or deep."),
     service: stringSchema("Service id for action=current/deps. Defaults to current repo service."),
     direction: stringSchema("For action=deps: outbound, inbound, or all."),
     strict: booleanSchema("For action=check: fail on unknown dependencies/providers instead of warning."),
-    write: booleanSchema("Whether to write registry/project files for init/link/scan/map. Defaults to false preview."),
+    write: booleanSchema("Whether to write registry files for init/link/scan/map. Defaults to false preview."),
     commit: booleanSchema("Whether action=sync may commit registry changes. Defaults to false preview."),
     push: booleanSchema("Whether action=sync may push after commit. Requires commit=true."),
   }),
@@ -409,8 +409,8 @@ export function callTapheluTool(name, args = {}, serverCwd = process.cwd()) {
     const action = String(args.action || "check").trim() || "check";
     const input = {
       ...args,
-      path: args.path || (action === "scan" || action === "current" || action === "deps" ? "." : ".taphelu/contracts"),
-      "contracts-path": args.contracts_path || args["contracts-path"] || ".taphelu/contracts",
+      path: args.path || (action === "scan" || action === "current" || action === "deps" ? "." : ".projects/contracts"),
+      "contracts-path": args.contracts_path || args["contracts-path"] || ".projects/contracts",
     };
     if (action === "init") {
       const report = analyzeContractsInit(root, input);

@@ -118,7 +118,7 @@ Use `dl scan map` for one repo. Use `dl contracts` when service communication sp
 Default registry path:
 
 ```text
-.taphelu/contracts/
+.projects/contracts/
   registry.json
   services/
   interactions/
@@ -139,9 +139,9 @@ Default registry path:
 Initialize or link a shared registry:
 
 ```bash
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
-dl contracts link --path .taphelu/contracts --write
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git --write
+dl contracts link --path .projects/contracts --write
 ```
 
 Preview-first service import:

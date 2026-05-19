@@ -108,11 +108,11 @@ dl scan map --path . --mode standard --focus all --write
 - `.projects/graphs/service-graph.json`
 - `.projects/graphs/service-graph.mmd`
 
-For polyrepo systems, keep shared service interactions in a registry repo or submodule:
+For polyrepo systems, keep shared service interactions in a registry repo under `.projects/contracts`:
 
 ```bash
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git --write
 dl contracts scan --path . --mode standard
 dl contracts scan --path . --mode standard --write
 dl contracts check --strict
@@ -121,7 +121,7 @@ dl contracts deps --direction all
 dl contracts map --write
 ```
 
-The registry stores service metadata, API contracts, Kafka/queue/topic/pubsub/Redis interaction metadata, and graph artifacts under `.taphelu/contracts`. It is the source of truth for cross-service planning when `dl contracts check --strict` passes. If service implementation and registry disagree, stop and resolve the conflict before planning.
+The registry stores service metadata, API contracts, Kafka/queue/topic/pubsub/Redis interaction metadata, and graph artifacts under `.projects/contracts`. It is the source of truth for cross-service planning when `dl contracts check --strict` passes. If service implementation and registry disagree, stop and resolve the conflict before planning.
 
 ## Project Context Files
 

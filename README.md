@@ -210,7 +210,7 @@ For microservices and polyrepo systems, Taphelu can use one shared contract regi
 Default layout:
 
 ```text
-.taphelu/contracts/
+.projects/contracts/
   registry.json
   services/
   interactions/
@@ -226,8 +226,8 @@ Default layout:
 Initialize or link a registry:
 
 ```bash
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
-dl contracts link --path .taphelu/contracts --write
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git --write
+dl contracts link --path .projects/contracts --write
 ```
 
 Scan the current service and update the registry:
@@ -529,7 +529,7 @@ Với microservices và polyrepo, Taphelu có thể dùng một shared contract 
 Layout mặc định:
 
 ```text
-.taphelu/contracts/
+.projects/contracts/
   registry.json
   services/
   interactions/
@@ -545,8 +545,8 @@ Layout mặc định:
 Init hoặc link registry:
 
 ```bash
-dl contracts init --path .taphelu/contracts --remote git@github.com:org/contracts.git --write
-dl contracts link --path .taphelu/contracts --write
+dl contracts init --path .projects/contracts --remote git@github.com:org/contracts.git --write
+dl contracts link --path .projects/contracts --write
 ```
 
 Scan service hiện tại và cập nhật registry:

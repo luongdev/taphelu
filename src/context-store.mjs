@@ -50,7 +50,6 @@ export function buildContextIndex(root, config = readProjectConfig(root), store 
   validateStore(root, store);
   const artifacts = [
     ...collectArtifacts(root, join(root, ".projects"), ".projects"),
-    ...collectArtifacts(root, join(root, ".taphelu", "contracts"), ".taphelu/contracts"),
     ...(store.kind === "project" ? [] : collectArtifacts(root, store.root, store.displayPath)),
   ]
     .filter((artifact, index, all) => all.findIndex((item) => item.path === artifact.path) === index)
@@ -495,7 +494,7 @@ function artifactType(display) {
   if (path.includes("/archive/")) return "archive";
   if (path.includes("/active/")) return "active";
   if (path.includes("/scans/") || /CODEBASE|SERVICE-MAP|API-CONTRACTS|DOMAIN|SCAN-PLAN/.test(path)) return "scan";
-  if (path.includes(".taphelu/contracts/") || path.includes("/contracts/")) return "contract";
+  if (path.includes(".projects/contracts/") || path.includes("/contracts/")) return "contract";
   if (/ROADMAP|MILESTONE-PLANS/.test(path)) return "roadmap";
   if (path.includes("/graphs/")) return "graph";
   return "artifact";

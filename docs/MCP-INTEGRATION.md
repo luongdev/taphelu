@@ -60,8 +60,8 @@ Use its `action` field for onboarding flow:
 
 Actions:
 
-- `init`: preview or create `.taphelu/contracts` layout; with `remote`, `write=true` may add a git submodule.
-- `link`: record an existing registry pointer in `.projects/CONTRACTS.md`.
+- `init`: preview or create `.projects/contracts` layout; with `remote`, `write=true` clones the registry inside `.projects/contracts`.
+- `link`: validate an existing `.projects/contracts` registry without writing root project context files.
 - `scan`: import current service evidence into the shared registry. Use `path` for service repo path and `contracts_path` for registry path.
 - `map`: refresh cross-repo service graph artifacts from `registry.json`.
 - `check`: validate metadata, stale/missing contract paths, and registry-vs-service conflicts.
