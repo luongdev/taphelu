@@ -192,6 +192,8 @@ function buildRuntimeInstallPlan(root, pack, input) {
   const warnings = [];
   const manualActions = [];
   const selected = selectPackItems(pack, input.profile);
+  const primaryAgents = selected.agents.filter((agent) => isPrimaryAgent(agent));
+  const specialistAgents = selected.agents.filter((agent) => !isPrimaryAgent(agent));
   const installCore = selected.skills.length > 0;
   const useGeminiExtensionMcp = input.runtime === "gemini" && installCore;
 
@@ -209,7 +211,28 @@ function buildRuntimeInstallPlan(root, pack, input) {
     if (input.runtime === "kiro") {
       const hook = pack.hooks[0];
       const hookPath = join(targetRoot.hooksRoot, `${hook.name}.mjs`);
-      for (const agent of selected.agents) {
+      for (const agent of primaryAgents) {
+        addManagedFile(files, blockers, {
+          path: join(targetRoot.skillsRoot, agent.name, "SKILL.md"),
+          content: renderAgentAsSkill(agent, pack.manifest.managedMarker, input.runtime),
+          marker: pack.manifest.managedMarker,
+          kind: "skill",
+          runtime: input.runtime,
+        });
+        addManagedRemoval(files, blockers, {
+          path: join(targetRoot.agentsRoot, `${agent.name}.json`),
+          marker: pack.manifest.managedMarker,
+          kind: "remove",
+          runtime: input.runtime,
+        });
+        addManagedRemoval(files, blockers, {
+          path: join(targetRoot.agentsRoot, `${agent.name}.md`),
+          marker: pack.manifest.managedMarker,
+          kind: "remove",
+          runtime: input.runtime,
+        });
+      }
+      for (const agent of specialistAgents) {
         addManagedFile(files, blockers, {
           path: join(targetRoot.agentsRoot, `${agent.name}.json`),
           content: renderKiroAgent(agent, pack.manifest.managedMarker, input, hookPath),
@@ -225,8 +248,30 @@ function buildRuntimeInstallPlan(root, pack, input) {
           runtime: input.runtime,
         });
       }
+      addManagedFile(files, blockers, {
+        path: join(targetRoot.steeringRoot, "taphelu-runtime.md"),
+        content: renderKiroSteering(pack.manifest.managedMarker),
+        marker: pack.manifest.managedMarker,
+        kind: "instruction",
+        runtime: input.runtime,
+      });
     } else if (runtimeConfig.nativeAgents) {
-      for (const agent of selected.agents) {
+      for (const agent of primaryAgents) {
+        addManagedFile(files, blockers, {
+          path: join(targetRoot.skillsRoot, agent.name, "SKILL.md"),
+          content: renderAgentAsSkill(agent, pack.manifest.managedMarker, input.runtime),
+          marker: pack.manifest.managedMarker,
+          kind: "skill",
+          runtime: input.runtime,
+        });
+        addManagedRemoval(files, blockers, {
+          path: join(targetRoot.agentsRoot, `${agent.name}.md`),
+          marker: pack.manifest.managedMarker,
+          kind: "remove",
+          runtime: input.runtime,
+        });
+      }
+      for (const agent of specialistAgents) {
         addManagedFile(files, blockers, {
           path: join(targetRoot.agentsRoot, `${agent.name}.md`),
           content: renderAgent(agent, pack.manifest.managedMarker, input.runtime),
@@ -499,8 +544,33 @@ function renderKiroAgent(item, marker, input, hookPath) {
 
 function renderAgentAsSkill(item, marker, runtime) {
   const name = item.name;
-  const description = `Use as the ${item.frontmatter.name || item.name} role contract when this runtime has no native Taphelu subagent adapter. ${item.description}`;
+  const description = isPrimaryAgent(item)
+    ? `Use as the main-session ${item.frontmatter.name || item.name} role contract. This is not a sub-agent role. ${item.description}`
+    : `Use as the ${item.frontmatter.name || item.name} role contract when this runtime has no native Taphelu subagent adapter. ${item.description}`;
   return renderMarkdownWithFrontmatter(item, marker, runtime, name, description);
+}
+
+function isPrimaryAgent(agent) {
+  return agent.name === "taphelu-lead";
+}
+
+function renderKiroSteering(marker) {
+  return `---
+inclusion: Always
+---
+
+# Taphelu Runtime
+
+<!-- ${marker}: do not edit. Regenerate with dl install. -->
+
+Use Taphelu as the workflow substrate for non-trivial project work.
+
+- Treat \`taphelu-lead\` as the main-session orchestration role.
+- Do not spawn or delegate to \`taphelu-lead\` as a sub-agent.
+- Delegate only specialist roles: taphelu-analyst, taphelu-planner, taphelu-architect, taphelu-dev, taphelu-qa, taphelu-ux-analyst, taphelu-visual-qa, taphelu-memory-curator, taphelu-context-curator, taphelu-workflow-adapter.
+- Start/resume with \`/dl-init\`, \`/dl-resume\`, or visible Taphelu \`dl_*\` MCP tools.
+- Keep context compact; prefer \`/dl-status\` and \`dl_context\`.
+`;
 }
 
 function renderMarkdownWithFrontmatter(item, marker, runtime, name, description, extra = {}) {
@@ -1291,6 +1361,7 @@ function runtimeTargetRoot(root, runtimeConfig, runtime, scope, configDir) {
       agentsRoot: runtimeConfig.agentsDir ? join(base, runtimeConfig.agentsDir) : join(base, "agents"),
       commandsRoot: runtime === "gemini" ? join(extensionRoot, "commands") : join(base, "commands"),
       hooksRoot: join(base, "hooks"),
+      steeringRoot: join(base, "steering"),
       settingsPath: runtimeSettingsPath(base, runtime),
       extensionRoot,
       extensionManifestPath: runtime === "gemini" ? join(extensionRoot, "gemini-extension.json") : "",
@@ -1306,6 +1377,7 @@ function runtimeTargetRoot(root, runtimeConfig, runtime, scope, configDir) {
     agentsRoot: runtimeConfig.agentsDir ? join(base, runtimeConfig.agentsDir) : join(base, "agents"),
     commandsRoot: runtime === "gemini" ? join(extensionRoot, "commands") : join(base, "commands"),
     hooksRoot: join(base, "hooks"),
+    steeringRoot: join(base, "steering"),
     settingsPath: runtimeSettingsPath(base, runtime),
     extensionRoot,
     extensionManifestPath: runtime === "gemini" ? join(extensionRoot, "gemini-extension.json") : "",

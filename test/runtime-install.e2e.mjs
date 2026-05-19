@@ -60,8 +60,11 @@ test("package tarball installs runtime adapters and validates MCP from installed
   assert.equal(JSON.parse(readFileSync(join(runtimeHome, "kiro", "settings", "mcp.json"), "utf8")).mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
   assert.equal(existsSync(join(runtimeHome, "kiro", "hooks", "taphelu-statusline.mjs")), false);
   assert.equal(JSON.parse(readFileSync(join(runtimeHome, "kiro", "settings", "taphelu.json"), "utf8")).taphelu.statusline.mode, "native-tui");
-  const kiroAgent = JSON.parse(readFileSync(join(runtimeHome, "kiro", "agents", "taphelu-lead.json"), "utf8"));
+  const kiroAgent = JSON.parse(readFileSync(join(runtimeHome, "kiro", "agents", "taphelu-dev.json"), "utf8"));
+  const kiroLeadSkill = readFileSync(join(runtimeHome, "kiro", "skills", "taphelu-lead", "SKILL.md"), "utf8");
   const kiroIdeHook = JSON.parse(readFileSync(join(runtimeHome, "kiro", "hooks", "taphelu-prompt-context.kiro.hook"), "utf8"));
+  assert.equal(existsSync(join(runtimeHome, "kiro", "agents", "taphelu-lead.json")), false);
+  assert.match(kiroLeadSkill, /main-session taphelu-lead role contract/);
   assert.equal(kiroAgent.includeMcpJson, true);
   assert.equal(kiroAgent.hooks.userPromptSubmit[0].command.includes("--runtime kiro"), true);
   assert.equal(kiroIdeHook.when.type, "promptSubmit");

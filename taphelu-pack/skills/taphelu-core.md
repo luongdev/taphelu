@@ -7,6 +7,8 @@ description: Use when starting, resuming, checkpointing, or closing Taphelu-back
 
 Use Taphelu as the session substrate before doing non-trivial project work.
 
+`taphelu-lead` is the main-session orchestration role. Do not spawn `taphelu-lead` as a sub-agent. Delegate only to specialist roles such as analyst, planner, architect, dev, QA, UX analyst, visual QA, memory curator, context curator, and workflow adapter.
+
 Required flow:
 
 1. Start or resume with `dl_start`.

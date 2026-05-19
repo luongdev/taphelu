@@ -585,9 +585,12 @@ test("install write creates local runtime adapters and doctor passes", () => {
   const install = run(root, ["install", "--runtime", "all", "--scope", "local", "--write"]);
   const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "local"]);
   const codexSkill = readFileSync(join(root, ".codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
-  const claudeAgent = readFileSync(join(root, ".claude", "agents", "taphelu-lead.md"), "utf8");
+  const claudeLeadSkill = readFileSync(join(root, ".claude", "skills", "taphelu-lead", "SKILL.md"), "utf8");
+  const claudeDevAgent = readFileSync(join(root, ".claude", "agents", "taphelu-dev.md"), "utf8");
   const geminiAgentSkill = readFileSync(join(root, ".gemini", "skills", "taphelu-lead", "SKILL.md"), "utf8");
-  const kiroAgent = JSON.parse(readFileSync(join(root, ".kiro", "agents", "taphelu-lead.json"), "utf8"));
+  const kiroLeadSkill = readFileSync(join(root, ".kiro", "skills", "taphelu-lead", "SKILL.md"), "utf8");
+  const kiroAgent = JSON.parse(readFileSync(join(root, ".kiro", "agents", "taphelu-dev.json"), "utf8"));
+  const kiroSteering = readFileSync(join(root, ".kiro", "steering", "taphelu-runtime.md"), "utf8");
   const claudeMcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
   const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8"));
   const claudeCommand = readFileSync(join(root, ".claude", "commands", "dl-init.md"), "utf8");
@@ -619,15 +622,15 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.match(codexSkill, /Do not invent host tools/);
   assert.match(codexPointer, /Use Taphelu MCP tools/);
   assert.match(codexPointer, /Use only visible Taphelu entrypoints/);
-  assert.match(claudeAgent, /taphelu-lead/);
-  assert.match(claudeAgent, /sub-agent permission/);
-  assert.match(claudeAgent, /skills:\n  - "taphelu-core"/);
+  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-lead.md")), false);
+  assert.match(claudeLeadSkill, /main-session taphelu-lead role contract/);
+  assert.match(claudeDevAgent, /taphelu-dev/);
   assert.match(claudeCommand, /# Taphelu Init/);
   assert.equal(claudeSettings.statusLine.tapheluManaged, "1");
   assert.equal(claudeSettings.hooks.PreToolUse[0].hooks[0].command, process.execPath);
   assert.equal(codexRuntimeSettings.taphelu.statusline.mode, "fallback");
   assert.equal(existsSync(join(root, ".codex", "hooks", "taphelu-statusline.mjs")), false);
-  assert.match(geminiAgentSkill, /runtime has no native Taphelu subagent adapter/);
+  assert.match(geminiAgentSkill, /main-session taphelu-lead role contract/);
   assert.equal(geminiExtension.mcpServers.taphelu.env.TAPHELU_MANAGED, "1");
   assert.match(geminiContext, /mcp_taphelu_dl_context/);
   assert.match(geminiContext, /Do not call `activate_skill`/);
@@ -639,8 +642,11 @@ test("install write creates local runtime adapters and doctor passes", () => {
   assert.equal(geminiRuntimeSettings.taphelu.statusline.mode, "native-footer");
   assert.equal(existsSync(join(root, ".gemini", "hooks", "taphelu-statusline.mjs")), false);
   assert.match(geminiCommand, /prompt =/);
-  assert.equal(kiroAgent.name, "taphelu-lead");
-  assert.match(kiroAgent.prompt, /taphelu-lead/);
+  assert.equal(existsSync(join(root, ".kiro", "agents", "taphelu-lead.json")), false);
+  assert.match(kiroLeadSkill, /main-session taphelu-lead role contract/);
+  assert.match(kiroSteering, /Do not spawn or delegate to `taphelu-lead`/);
+  assert.equal(kiroAgent.name, "taphelu-dev");
+  assert.match(kiroAgent.prompt, /taphelu-dev/);
   assert.equal(kiroAgent.includeMcpJson, true);
   assert.deepEqual(kiroAgent.tools, ["*"]);
   assert.equal(kiroAgent.hooks.userPromptSubmit[0].command.includes("--runtime kiro"), true);
@@ -691,7 +697,8 @@ test("install core profile filters optional skills and dependent agents", () => 
   assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-core", "SKILL.md")), true);
   assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-browser", "SKILL.md")), false);
   assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-adapters", "SKILL.md")), false);
-  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-lead.md")), true);
+  assert.equal(existsSync(join(root, ".claude", "skills", "taphelu-lead", "SKILL.md")), true);
+  assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-lead.md")), false);
   assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-visual-qa.md")), false);
   assert.equal(existsSync(join(root, ".claude", "agents", "taphelu-workflow-adapter.md")), false);
 });
@@ -891,7 +898,8 @@ test("global install all separates runtimes under shared config dir", () => {
   const doctor = run(root, ["doctor", "--runtime", "all", "--scope", "global", "--config-dir", configDir]);
   const codexSkill = readFileSync(join(configDir, "codex", "skills", "taphelu-core", "SKILL.md"), "utf8");
   const geminiSkill = readFileSync(join(configDir, "gemini", "skills", "taphelu-core", "SKILL.md"), "utf8");
-  const kiroAgent = JSON.parse(readFileSync(join(configDir, "kiro", "agents", "taphelu-lead.json"), "utf8"));
+  const kiroAgent = JSON.parse(readFileSync(join(configDir, "kiro", "agents", "taphelu-dev.json"), "utf8"));
+  const kiroLeadSkill = readFileSync(join(configDir, "kiro", "skills", "taphelu-lead", "SKILL.md"), "utf8");
 
   assert.equal(install.status, 0, install.stderr);
   assert.equal(doctor.status, 0, doctor.stderr);
@@ -902,6 +910,8 @@ test("global install all separates runtimes under shared config dir", () => {
   assert.equal(existsSync(join(configDir, "kiro", "settings", "mcp.json")), true);
   assert.match(codexSkill, /taphelu_runtime: "codex"/);
   assert.match(geminiSkill, /taphelu_runtime: "gemini"/);
+  assert.equal(existsSync(join(configDir, "kiro", "agents", "taphelu-lead.json")), false);
+  assert.match(kiroLeadSkill, /main-session taphelu-lead role contract/);
   assert.match(kiroAgent.prompt, /TAPHELU-GENERATED/);
   assert.equal(kiroAgent.includeMcpJson, true);
 });

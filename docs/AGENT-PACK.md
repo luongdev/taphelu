@@ -28,7 +28,7 @@ Generated runtime files are not source of truth. They include a Taphelu managed 
 
 ## Agent Roles
 
-- `taphelu-lead`
+- `taphelu-lead` (main-session role, not a spawned sub-agent)
 - `taphelu-analyst`
 - `taphelu-planner`
 - `taphelu-architect`
@@ -42,7 +42,7 @@ Generated runtime files are not source of truth. They include a Taphelu managed 
 
 If a runtime supports native agents, Taphelu generates native agent files. Otherwise, agent role contracts are generated as skills.
 
-`taphelu-lead` asks for sub-agent permission at session start. `taphelu-planner` creates parallelizable task contracts; `taphelu-qa` reviews task testability before `taphelu-dev` executes. UI-visible work requires both UX analysis and visual QA evidence before closeout.
+`taphelu-lead` asks for sub-agent permission at session start and coordinates from the main session. Runtime adapters must not expose `taphelu-lead` as a native spawned sub-agent; specialist roles such as `taphelu-planner`, `taphelu-dev`, and `taphelu-qa` are the delegated roles. `taphelu-planner` creates parallelizable task contracts; `taphelu-qa` reviews task testability before `taphelu-dev` executes. UI-visible work requires both UX analysis and visual QA evidence before closeout.
 
 ## Runtime Orchestration
 
