@@ -1,5 +1,6 @@
 export const COMMAND_MANIFEST = [
   { name: "status", usage: "dl status", summary: "Show current .projects state." },
+  { name: "version", usage: "dl version | dl --version | dl -v", summary: "Show installed Taphelu version." },
   { name: "commands", usage: "dl commands", summary: "Show stable command manifest." },
   { name: "ask", usage: "dl ask [--mode quick|standard|deep] <goal>", summary: "Produce a requirement packet from a goal." },
   { name: "research", usage: "dl research [--source text] [--finding text] <question>", summary: "Produce a research packet from findings and sources." },

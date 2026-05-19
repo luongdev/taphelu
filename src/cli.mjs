@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { findProjectRoot } from "./project.mjs";
 import { gitRootOrCwd } from "./utils.mjs";
 import { fail } from "./errors.mjs";
@@ -30,12 +31,18 @@ export function main(argv = process.argv, cwd = process.cwd()) {
     return;
   }
 
+  if (command === "version" || command === "--version" || command === "-v") {
+    printVersion();
+    return;
+  }
+
   const root = findProjectRoot(cwd) || bootstrapCommandRoot(command, args, cwd);
   if (!root) {
     fail("No .projects/PROJECT.md found from current directory upward.");
   }
 
   if (command === "status") return printStatus(root);
+  if (command === "version") return printVersion();
   if (command === "commands") return printCommands();
   if (command === "ask") return runAsk(root, args);
   if (command === "research") return runResearch(root, args);
@@ -62,7 +69,7 @@ export function main(argv = process.argv, cwd = process.cwd()) {
 }
 
 function bootstrapCommandRoot(command, args, cwd) {
-  if (command === "commands" || command === "install" || command === "doctor" || command === "runtime") return cwd;
+  if (command === "commands" || command === "version" || command === "install" || command === "doctor" || command === "runtime") return cwd;
   if (command === "scan") return cwd;
   if (command === "contracts") return gitRootOrCwd(cwd);
   if (command === "import" && args[0] === "project") return cwd;
@@ -74,6 +81,7 @@ export function printHelp() {
 
 Usage:
   dl status
+  dl version
   dl commands
   dl ask [--mode quick|standard|deep] [--approval-scope text] [--context path] [--write] <goal>
   dl research [--source text] [--finding text] [--confidence low|medium|high] [--approval-scope text] [--write] <question>
@@ -120,6 +128,7 @@ Usage:
 
 Commands:
   status    Show current .projects state.
+  version   Show installed Taphelu version.
   commands  Show stable command manifest.
   ask       Produce a requirement packet from a goal.
   research  Produce a research packet from findings and sources.
@@ -142,4 +151,9 @@ Commands:
   runtime   Show runtime adapter and live MCP health.
   config    Read or update project-local Taphelu config.
 `);
+}
+
+export function printVersion() {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  console.log(packageJson.version);
 }

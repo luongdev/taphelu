@@ -217,6 +217,7 @@ test("commands prints stable command manifest", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /# Command Manifest/);
   assert.match(result.stdout, /`status`/);
+  assert.match(result.stdout, /`version`/);
   assert.match(result.stdout, /`verify`/);
   assert.match(result.stdout, /`import`/);
   assert.match(result.stdout, /`scan`/);
@@ -226,6 +227,17 @@ test("commands prints stable command manifest", () => {
   assert.match(result.stdout, /`context`/);
   assert.match(result.stdout, /`compact`/);
   assert.match(result.stdout, /`config`/);
+});
+
+test("version works without .projects", () => {
+  const root = makePlainRepo();
+  const expectedVersion = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")).version;
+
+  for (const args of [["version"], ["--version"], ["-v"]]) {
+    const result = run(root, args);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), expectedVersion);
+  }
 });
 
 test("commands and runtime install commands work without .projects", () => {
@@ -239,6 +251,7 @@ test("commands and runtime install commands work without .projects", () => {
 
   assert.equal(commands.status, 0, commands.stderr);
   assert.match(commands.stdout, /# Command Manifest/);
+  assert.match(commands.stdout, /dl --version/);
   assert.equal(localInstall.status, 0, localInstall.stderr);
   assert.equal(localDoctor.status, 0, localDoctor.stderr);
   assert.match(localDoctor.stdout, /`PASS`/);
