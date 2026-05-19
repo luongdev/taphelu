@@ -4,8 +4,8 @@ Taphelu is a local-first workflow substrate for long-running AI-agent work. It p
 
 ## Status
 
-- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, polyrepo contract registry v1, service interaction registry, and stable release `0.1.3`.
-- Current: stable `0.1.3` release validation, dogfood fixes, and validation of shared contract registries on real polyrepo systems.
+- Implemented: CLI workflow primitives, MCP lifecycle tools, SQLite memory v1, canonical agent pack, Claude/Codex/Gemini/Kiro adapter generation, team roles, QA testability gate, project config, cross-AI review policy, context cleanup, instruction hygiene, release readiness docs, generic project scan/import v1, scan v2 domain interview/scan planning, microservice topology/API contract mapping, context store v2 with milestone compaction, runtime install E2E, pre-publish release guard, runtime orchestration kit, polyrepo contract registry v1, service interaction registry, and stable release `0.1.2`.
+- Current: stable `0.1.2` release validation, dogfood fixes, and validation of shared contract registries on real polyrepo systems.
 - Next: choose the next implementation milestone from repeated tester friction.
 - Later: richer graph/index features.
 
@@ -21,7 +21,7 @@ Includes:
 - Pack whitelist that includes `bin`, `src`, `scripts`, `taphelu-pack`, and `docs`.
 - README, LICENSE, install docs, and publish checklist.
 - Smoke tests for package pack, temp global install, `dl commands`, `dl scan`, MCP syntax, and runtime adapters.
-- Current stable target: `@luongdev/taphelu@0.1.3`.
+- Current stable target: `@luongdev/taphelu@0.1.2`.
 
 Done when:
 

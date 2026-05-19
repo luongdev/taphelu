@@ -14,7 +14,7 @@ pnpm run release:check
 
 `release:check` does not publish. It verifies the working tree is clean, the exact `package.json` version is not already published, npm registry auth is available, baseline tests pass, runtime install E2E passes, and the dry-run tarball has the expected contents.
 
-For future test publishes, use prerelease build versions such as `0.1.3-build.1`. Keep stable versions for builds that have passed the release gate.
+For future test publishes, use prerelease build versions such as `0.1.2-build.1`. Keep stable versions for builds that have passed the release gate.
 
 The expanded command sequence is:
 
