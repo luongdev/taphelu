@@ -1,6 +1,6 @@
 {
   "name": "@luongdev/taphelu",
-  "version": "0.1.1",
+  "version": "0.1.0-build.3",
   "description": "Agent-native local workflow substrate for long-running AI-assisted projects.",
   "type": "module",
   "repository": {

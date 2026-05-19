@@ -6,10 +6,10 @@ Install the published package:
 pnpm add -g @luongdev/taphelu
 ```
 
-Current stable release:
+Current test release:
 
 ```bash
-0.1.1
+0.1.0-build.3
 ```
 
 For source checkout testing, install from a local tarball:
